@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"time"
 )
 
 func logIfErrExist(err error) {
@@ -13,10 +14,11 @@ func logIfErrExist(err error) {
 	}
 }
 
-func Execute() {
-	cmd := exec.Command("echo", "-n", `{"Name": "Bob", "Age": 32}`)
+func Execute(commands []string, sleepSec int) {
+	cmd := exec.Command(commands[0], commands[1:]...)
 	stdout, err := cmd.StdoutPipe()
 	logIfErrExist(err)
+	time.Sleep(time.Duration(sleepSec) * time.Second)
 	logIfErrExist(cmd.Start())
 	var person struct {
 		Name string

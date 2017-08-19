@@ -10,6 +10,7 @@ import (
 )
 
 var cfgFile string
+var sleepSec int
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
@@ -17,7 +18,7 @@ var RootCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("hoge")
-		sosos.Execute()
+		sosos.Execute([]string{"echo", "-n", `{"Name": "Bob", "Age": 32}`}, sleepSec)
 	},
 }
 
@@ -32,6 +33,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sosos.yaml)")
+	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "sleep time(sec)")
 }
 
 // initConfig reads in config file and ENV variables if set.
