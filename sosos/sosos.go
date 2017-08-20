@@ -9,6 +9,9 @@ import (
 
 	"os"
 
+	"bytes"
+	"encoding/json"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -21,6 +24,10 @@ type CancelServer struct {
 	Ch chan int
 }
 
+type SlackWebhookContent struct {
+	Text string `json:"text"`
+}
+
 func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 	fmt.Fprintln(rw, "Cancel request is accepted")
@@ -29,8 +36,8 @@ func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-func Execute(commands []string, sleepSec int, port int, insecureFlag bool) error {
-	isCanceled, err := waitWithCancelServer(sleepSec, port, insecureFlag)
+func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string) error {
+	isCanceled, err := waitWithCancelServer(sleepSec, port, insecureFlag, webhookUrl)
 	if err != nil {
 		return err
 	}
@@ -45,13 +52,16 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool) error
 		fmt.Println("---- command output ----")
 		fmt.Println(string(out))
 		fmt.Println("---- command output ----")
+		// 結果をwebhookで通知
 	} else {
 		fmt.Println("command is canceled")
+		// cancelされたことをwebhookで通知
+
 	}
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) (bool, error) {
+func waitWithCancelServer(sleepSec int, port int, insecureFlag bool, webhookUrl string) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false, err
@@ -79,6 +89,21 @@ func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) (bool, erro
 	}
 
 	fmt.Printf("Cancel URL is %s://%s:%d/cancel\n", protocol, hostname, port)
+
+	// webhook
+	content, err := json.Marshal(SlackWebhookContent{Text: "hoge"})
+	if err != nil {
+		return false, err
+	}
+
+	fmt.Println(string(content))
+
+	res, err := http.Post(webhookUrl, "application/json", bytes.NewReader(content))
+	if err != nil {
+		return false, nil
+	}
+
+	fmt.Printf("%v", res)
 
 	go func() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)
