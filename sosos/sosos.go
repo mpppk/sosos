@@ -30,10 +30,18 @@ func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func Execute(commands []string, sleepSec int, port int, insecureFlag bool) error {
-	isCanceled := waitWithCancelServer(sleepSec, port, insecureFlag)
+	isCanceled, err := waitWithCancelServer(sleepSec, port, insecureFlag)
+	if err != nil {
+		return err
+	}
+
 	if !isCanceled {
 		fmt.Println("Start command execution")
-		out, _ := exec.Command(commands[0], commands[1:]...).CombinedOutput()
+		out, err := exec.Command(commands[0], commands[1:]...).CombinedOutput()
+		if err != nil {
+			return err
+		}
+
 		fmt.Println("---- command output ----")
 		fmt.Println(string(out))
 		fmt.Println("---- command output ----")
@@ -43,14 +51,14 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool) error
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) bool {
+func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	sl, err := stoppableListener.New(l)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 
 	ch := make(chan int)
@@ -62,7 +70,7 @@ func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) bool {
 	}()
 	hostname, err := os.Hostname()
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 
 	protocol := "http"
@@ -80,5 +88,5 @@ func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) bool {
 	state := <-ch
 	sl.Stop()
 
-	return state == STATE_CANCELED
+	return state == STATE_CANCELED, nil
 }
