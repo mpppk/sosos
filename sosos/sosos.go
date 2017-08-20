@@ -84,9 +84,8 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 		u.Hostname())
 
 	message += "If you want to cancel this command, please click the following Link\n"
-	message += fmt.Sprintf("[Cancel](%s)", cancelServerUrl)
-
-	// webhook
+	message += fmt.Sprintf("[Cancel](%s/cancel)", cancelServerUrl)
+	fmt.Println(message)
 	res, err := postMessageToSlack(webhookUrl, message)
 	if err != nil {
 		return err
@@ -94,7 +93,7 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 
 	fmt.Println("http response " + res.Status)
 
-	isCanceled, err := waitWithCancelServer(sleepSec, port, insecureFlag, webhookUrl)
+	isCanceled, err := waitWithCancelServer(sleepSec, port)
 	if err != nil {
 		return err
 	}
@@ -126,13 +125,18 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 
 		fmt.Println("http response " + resultRes.Status)
 	} else {
-		fmt.Println("command is canceled")
-
+		message := "Command is canceled"
+		fmt.Println(message)
+		res, err := postMessageToSlack(webhookUrl, message)
+		if err != nil {
+			return err
+		}
+		fmt.Println("http response " + res.Status)
 	}
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int, insecureFlag bool, webhookUrl string) (bool, error) {
+func waitWithCancelServer(sleepSec int, port int) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false, err
@@ -149,13 +153,6 @@ func waitWithCancelServer(sleepSec int, port int, insecureFlag bool, webhookUrl 
 	go func() {
 		s.Serve(sl)
 	}()
-
-	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
-	if err != nil {
-		return false, err
-	}
-
-	fmt.Printf("Cancel URL is %s/cancel\n", cancelServerUrl)
 
 	go func() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)
