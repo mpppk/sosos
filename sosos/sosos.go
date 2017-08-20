@@ -54,13 +54,22 @@ func getCancelServerUrl(insecureFlag bool, port int) (string, error) {
 	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
 }
 
-func postMessageToSlack(url, message string) (*http.Response, error) {
+type Slack struct {
+	WebhookUrl string
+}
+
+func (s *Slack) teeMessage(message string) (*http.Response, error) {
+	fmt.Println(message)
+	return s.postMessage(message)
+}
+
+func (s *Slack) postMessage(message string) (*http.Response, error) {
 	content, err := json.Marshal(SlackWebhookContent{Text: message})
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := http.Post(url, "application/json", bytes.NewReader(content))
+	res, err := http.Post(s.WebhookUrl, "application/json", bytes.NewReader(content))
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +77,7 @@ func postMessageToSlack(url, message string) (*http.Response, error) {
 }
 
 func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string) error {
+	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
 	if err != nil {
 		return err
@@ -85,8 +95,7 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 
 	message += "If you want to cancel this command, please click the following Link\n"
 	message += fmt.Sprintf("[Cancel](%s/cancel)", cancelServerUrl)
-	fmt.Println(message)
-	res, err := postMessageToSlack(webhookUrl, message)
+	res, err := slack.teeMessage(message)
 	if err != nil {
 		return err
 	}
@@ -99,13 +108,10 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 	}
 
 	if !isCanceled {
-		message := "Command execution is started!"
-		fmt.Println(message)
-		res, err := postMessageToSlack(webhookUrl, message)
+		res, err := slack.teeMessage("Command execution is started!")
 		if err != nil {
 			return err
 		}
-
 		fmt.Println("http response " + res.Status)
 
 		out, err := exec.Command(commands[0], commands[1:]...).CombinedOutput()
@@ -113,21 +119,13 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 			return err
 		}
 
-		fmt.Println("---- command output ----")
-		fmt.Println(string(out))
-		fmt.Println("---- command output ----")
-
-		resultMessage := fmt.Sprintf("result:\n```%s```", string(out))
-		resultRes, err := postMessageToSlack(webhookUrl, resultMessage)
+		resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```%s```", string(out)))
 		if err != nil {
 			return err
 		}
-
 		fmt.Println("http response " + resultRes.Status)
 	} else {
-		message := "Command is canceled"
-		fmt.Println(message)
-		res, err := postMessageToSlack(webhookUrl, message)
+		res, err := slack.teeMessage("Command is canceled")
 		if err != nil {
 			return err
 		}
