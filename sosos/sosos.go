@@ -29,8 +29,8 @@ func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-func Execute(commands []string, sleepSec int, port int) error {
-	isCanceled := waitWithCancelServer(sleepSec, port)
+func Execute(commands []string, sleepSec int, port int, insecureFlag bool) error {
+	isCanceled := waitWithCancelServer(sleepSec, port, insecureFlag)
 	if !isCanceled {
 		fmt.Println("Start command execution")
 		out, _ := exec.Command(commands[0], commands[1:]...).CombinedOutput()
@@ -43,7 +43,7 @@ func Execute(commands []string, sleepSec int, port int) error {
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int) bool {
+func waitWithCancelServer(sleepSec int, port int, insecureFlag bool) bool {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		panic(err)
@@ -64,7 +64,13 @@ func waitWithCancelServer(sleepSec int, port int) bool {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Cancel URL is http://%s:%d/cancel\n", hostname, port)
+
+	protocol := "http"
+	if !insecureFlag {
+		protocol = protocol + "s"
+	}
+
+	fmt.Printf("Cancel URL is %s://%s:%d/cancel\n", protocol, hostname, port)
 
 	go func() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)

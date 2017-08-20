@@ -12,14 +12,14 @@ import (
 var cfgFile string
 var sleepSec int
 var port int
+var insecureFlag bool
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
 	Short: "delay & notify tool",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(args)
-		if err := sosos.Execute(args, sleepSec, port); err != nil {
+		if err := sosos.Execute(args, sleepSec, port, insecureFlag); err != nil {
 			fmt.Println(err)
 		}
 	},
@@ -38,6 +38,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sosos.yaml)")
 	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "sleep time(sec)")
 	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "port of cancel server")
+	RootCmd.PersistentFlags().BoolVarP(&insecureFlag, "insecure-server", "i", false, "Use http protocol for cancel server")
 }
 
 // initConfig reads in config file and ENV variables if set.
