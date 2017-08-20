@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"time"
 
+	"os"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -21,14 +23,14 @@ type CancelServer struct {
 
 func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "Cancel request is accepted")
+	fmt.Fprintln(rw, "Cancel request is accepted")
 	go func() {
 		c.Ch <- STATE_CANCELED
 	}()
 }
 
-func Execute(commands []string, sleepSec int) error {
-	isCanceled := waitWithCancelServer(sleepSec)
+func Execute(commands []string, sleepSec int, port int) error {
+	isCanceled := waitWithCancelServer(sleepSec, port)
 	if !isCanceled {
 		fmt.Println("Start command execution")
 		out, _ := exec.Command(commands[0], commands[1:]...).CombinedOutput()
@@ -41,8 +43,8 @@ func Execute(commands []string, sleepSec int) error {
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int) bool {
-	l, err := net.Listen("tcp", ":3333")
+func waitWithCancelServer(sleepSec int, port int) bool {
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +60,11 @@ func waitWithCancelServer(sleepSec int) bool {
 	go func() {
 		s.Serve(sl)
 	}()
-	fmt.Println("Cancel URL is http://localhost:3333/cancel")
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Cancel URL is http://%s:%d/cancel\n", hostname, port)
 
 	go func() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)

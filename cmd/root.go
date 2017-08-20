@@ -11,13 +11,14 @@ import (
 
 var cfgFile string
 var sleepSec int
+var port int
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
 	Short: "delay & notify tool",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := sosos.Execute([]string{"echo", "hogehoge"}, sleepSec); err != nil {
+		if err := sosos.Execute([]string{"echo", "hogehoge"}, sleepSec, port); err != nil {
 			fmt.Println(err)
 		}
 	},
@@ -35,6 +36,7 @@ func init() {
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sosos.yaml)")
 	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "sleep time(sec)")
+	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "port of cancel server")
 }
 
 // initConfig reads in config file and ENV variables if set.
