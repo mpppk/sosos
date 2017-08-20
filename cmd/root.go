@@ -14,6 +14,7 @@ var sleepSec int
 var port int
 var insecureFlag bool
 var versionFlag bool
+var webhookUrl string
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
@@ -25,7 +26,7 @@ var RootCmd = &cobra.Command{
 			os.Exit(0)
 		}
 
-		if err := sosos.Execute(args, sleepSec, port, insecureFlag); err != nil {
+		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl); err != nil {
 			fmt.Println(err)
 		}
 	},
@@ -46,6 +47,7 @@ func init() {
 	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "port of cancel server")
 	RootCmd.PersistentFlags().BoolVarP(&insecureFlag, "insecure-server", "i", false, "Use http protocol for cancel server")
 	RootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "Print version")
+	RootCmd.PersistentFlags().StringVarP(&webhookUrl, "webhook", "w", "", "webhook URL")
 }
 
 // initConfig reads in config file and ENV variables if set.
