@@ -18,7 +18,8 @@ var RootCmd = &cobra.Command{
 	Short: "delay & notify tool",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := sosos.Execute([]string{"echo", "hogehoge"}, sleepSec, port); err != nil {
+		fmt.Println(args)
+		if err := sosos.Execute(args, sleepSec, port); err != nil {
 			fmt.Println(err)
 		}
 	},
