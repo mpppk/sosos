@@ -1,6 +1,7 @@
 package sosos
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -10,7 +11,10 @@ import (
 	"os"
 
 	"bytes"
-	"encoding/json"
+
+	"strings"
+
+	"net/url"
 
 	"github.com/hydrogen18/stoppableListener"
 )
@@ -36,14 +40,58 @@ func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}()
 }
 
+func getCancelServerUrl(insecureFlag bool, port int) (string, error) {
+	protocol := "http"
+	if !insecureFlag {
+		protocol = protocol + "s"
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
+}
+
 func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string) error {
+	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
+	if err != nil {
+		return err
+	}
+
+	u, err := url.Parse(cancelServerUrl)
+	if err != nil {
+		return err
+	}
+
+	message := fmt.Sprintf("The command `%s` will be executed after %d seconds on `%s`\n",
+		strings.Join(commands, " "),
+		sleepSec,
+		u.Hostname())
+
+	message += "If you want to cancel this command, please click the following Link\n"
+	message += fmt.Sprintf("[Cancel](%s)", cancelServerUrl)
+
+	// webhook
+	content, err := json.Marshal(SlackWebhookContent{Text: message})
+	if err != nil {
+		return err
+	}
+
+	res, err := http.Post(webhookUrl, "application/json", bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+
 	isCanceled, err := waitWithCancelServer(sleepSec, port, insecureFlag, webhookUrl)
 	if err != nil {
 		return err
 	}
 
 	if !isCanceled {
-		fmt.Println("Start command execution")
+		message := "Command execution is started!"
+		fmt.Println(message)
 		out, err := exec.Command(commands[0], commands[1:]...).CombinedOutput()
 		if err != nil {
 			return err
@@ -78,32 +126,13 @@ func waitWithCancelServer(sleepSec int, port int, insecureFlag bool, webhookUrl 
 	go func() {
 		s.Serve(sl)
 	}()
-	hostname, err := os.Hostname()
+
+	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
 	if err != nil {
 		return false, err
 	}
 
-	protocol := "http"
-	if !insecureFlag {
-		protocol = protocol + "s"
-	}
-
-	fmt.Printf("Cancel URL is %s://%s:%d/cancel\n", protocol, hostname, port)
-
-	// webhook
-	content, err := json.Marshal(SlackWebhookContent{Text: "hoge"})
-	if err != nil {
-		return false, err
-	}
-
-	fmt.Println(string(content))
-
-	res, err := http.Post(webhookUrl, "application/json", bytes.NewReader(content))
-	if err != nil {
-		return false, nil
-	}
-
-	fmt.Printf("%v", res)
+	fmt.Printf("Cancel URL is %s/cancel\n", cancelServerUrl)
 
 	go func() {
 		time.Sleep(time.Duration(sleepSec) * time.Second)
