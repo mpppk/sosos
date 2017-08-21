@@ -76,7 +76,7 @@ func (s *Slack) postMessage(message string) (*http.Response, error) {
 	return res, nil
 }
 
-func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string) error {
+func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool) error {
 	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
 	if err != nil {
@@ -93,8 +93,11 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 		sleepSec,
 		u.Hostname())
 
-	message += "If you want to cancel this command, please click the following Link\n"
-	message += fmt.Sprintf("[Cancel](%s/cancel)", cancelServerUrl)
+	if !noCancelLinkFlag {
+		message += "If you want to cancel this command, please click the following Link\n"
+		message += fmt.Sprintf("[Cancel](%s/cancel)", cancelServerUrl)
+	}
+
 	res, err := slack.teeMessage(message)
 	if err != nil {
 		return err
@@ -119,11 +122,15 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 			return err
 		}
 
-		resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```\n%s```", string(out)))
-		if err != nil {
-			return err
+		if !noResultFlag {
+			resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```\n%s```", string(out)))
+			if err != nil {
+				return err
+			}
+			fmt.Println("http response " + resultRes.Status)
+		} else {
+			slack.teeMessage("finish!")
 		}
-		fmt.Println("http response " + resultRes.Status)
 	} else {
 		res, err := slack.teeMessage("Command is canceled")
 		if err != nil {

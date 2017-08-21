@@ -19,6 +19,8 @@ var sleepSec int
 var port int
 var insecureFlag bool
 var versionFlag bool
+var noResultFlag bool
+var noCancelLinkFlag bool
 var argWebhook string
 
 var RootCmd = &cobra.Command{
@@ -48,7 +50,7 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl); err != nil {
+		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl, noResultFlag, noCancelLinkFlag); err != nil {
 			fmt.Println(err)
 		}
 	},
@@ -65,12 +67,14 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sosos.yaml)")
-	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "sleep time(sec)")
-	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "port of cancel server")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.sosos.yaml)")
+	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "Sleep time(sec)")
+	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "Port of cancel server")
 	RootCmd.PersistentFlags().BoolVarP(&insecureFlag, "insecure-server", "i", false, "Use http protocol for cancel server")
 	RootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "Print version")
 	RootCmd.PersistentFlags().StringVarP(&argWebhook, "webhook", "w", "", "Webhook URL")
+	RootCmd.PersistentFlags().BoolVar(&noResultFlag, "no-result", false, "Not display results of command")
+	RootCmd.PersistentFlags().BoolVar(&noCancelLinkFlag, "no-cancel-link", false, "Not display cancel link")
 }
 
 // initConfig reads in config file and ENV variables if set.
