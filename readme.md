@@ -1,5 +1,5 @@
 # SOSOS
-Sosos is a minimal command wrapper for realizing delay, notification, cancellation etc via chat.
+sosos is a minimal command wrapper for realizing delay, notification, cancellation etc via chat.
 
 # Usage
 
