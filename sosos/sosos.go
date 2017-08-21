@@ -119,7 +119,7 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 			return err
 		}
 
-		resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```%s```", string(out)))
+		resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```\n%s```", string(out)))
 		if err != nil {
 			return err
 		}
