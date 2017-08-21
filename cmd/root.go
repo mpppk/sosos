@@ -30,6 +30,7 @@ var RootCmd = &cobra.Command{
 			fmt.Println(err)
 		}
 	},
+	Args: cobra.MinimumNArgs(1),
 }
 
 func Execute() {
