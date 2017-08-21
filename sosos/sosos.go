@@ -152,6 +152,7 @@ func waitWithCancelServer(sleepSec int, port int) (bool, error) {
 	}
 
 	ch := make(chan int)
+	suspendSecCh := make(chan int)
 	http.Handle("/cancel", CancelServer{ch})
 	s := http.Server{}
 
@@ -160,8 +161,26 @@ func waitWithCancelServer(sleepSec int, port int) (bool, error) {
 	}()
 
 	go func() {
-		time.Sleep(time.Duration(sleepSec) * time.Second)
-		ch <- STATE_SLEEP_FINISHED
+		baseTime := time.Now()
+		ticker := time.NewTicker(500 * time.Millisecond)
+
+		for t := range ticker.C {
+			select {
+			case state := <-ch:
+				switch state {
+				case STATE_CANCELED:
+					return
+				}
+			case suspendSec := <-suspendSecCh:
+				baseTime.Add(time.Duration(suspendSec) * time.Second)
+			default:
+			}
+
+			if t.Sub(baseTime).Seconds() > float64(sleepSec) {
+				ch <- STATE_SLEEP_FINISHED
+				return
+			}
+		}
 	}()
 
 	state := <-ch
