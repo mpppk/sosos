@@ -3,9 +3,11 @@ package sosos
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"os"
@@ -24,19 +26,57 @@ const (
 	STATE_SLEEP_FINISHED
 )
 
-type CancelServer struct {
-	Ch chan int
-}
-
 type SlackWebhookContent struct {
 	Text string `json:"text"`
 }
 
-func (c CancelServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+type CancelHandler struct {
+	Ch chan int
+}
+
+func (c CancelHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 	fmt.Fprintln(rw, "Cancel request is accepted")
 	go func() {
 		c.Ch <- STATE_CANCELED
+	}()
+}
+
+type SuspendHandler struct {
+	Ch           chan int
+	SuspendSecCh chan int
+}
+
+func (s SuspendHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	err := req.ParseForm()
+	if err != nil {
+		fmt.Fprintln(rw, "Query parsing failed")
+		log.Println("Query parsing failed")
+		return
+	}
+
+	suspendSecStrs, ok := req.Form["suspendSec"]
+	if !ok || suspendSecStrs == nil || len(suspendSecStrs) < 1 {
+		rw.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(rw, "Parameter named \"SuspendSec\" is not found in request")
+		log.Println("Parameter named \"SuspendSec\" is not found in request")
+		return
+	}
+
+	suspendSec, err := strconv.Atoi(suspendSecStrs[0])
+
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(rw, "Parameter named \"SuspendSec\" is invalid in request")
+		log.Println(err)
+		return
+	}
+	rw.WriteHeader(http.StatusOK)
+	fmt.Fprintf(rw, "Suspend request(%d seconds) is accepted\n", suspendSec)
+
+	go func() {
+		//s.Ch <- STATE_SUSPENDED
+		s.SuspendSecCh <- suspendSec
 	}()
 }
 
@@ -77,6 +117,7 @@ func (s *Slack) postMessage(message string) (*http.Response, error) {
 }
 
 func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool) error {
+	suspendSecCh := make(chan int)
 	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
 	if err != nil {
@@ -94,8 +135,11 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 		u.Hostname())
 
 	if !noCancelLinkFlag {
-		message += "If you want to cancel this command, please click the following Link\n"
-		message += fmt.Sprintf("[Cancel](%s/cancel)", cancelServerUrl)
+		message += "If you want to suspend or cancel this command, please click the following Link\n"
+		message += fmt.Sprintf("[Cancel](%s/cancel)\n", cancelServerUrl)
+		message += fmt.Sprintf("[Suspend  5 minutes](%s/suspend?suspendSec=300)\n", cancelServerUrl)
+		message += fmt.Sprintf("[Suspend 20 minutes](%s/suspend?suspendSec=1200)\n", cancelServerUrl)
+		message += fmt.Sprintf("[Suspend 60 minutes](%s/suspend?suspendSec=3600)\n", cancelServerUrl)
 	}
 
 	res, err := slack.teeMessage(message)
@@ -105,7 +149,7 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 
 	fmt.Println("http response " + res.Status)
 
-	isCanceled, err := waitWithCancelServer(sleepSec, port)
+	isCanceled, err := waitWithCancelServer(sleepSec, port, suspendSecCh, slack)
 	if err != nil {
 		return err
 	}
@@ -141,7 +185,7 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int) (bool, error) {
+func waitWithCancelServer(sleepSec int, port int, suspendSecCh chan int, slack Slack) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false, err
@@ -152,8 +196,8 @@ func waitWithCancelServer(sleepSec int, port int) (bool, error) {
 	}
 
 	ch := make(chan int)
-	suspendSecCh := make(chan int)
-	http.Handle("/cancel", CancelServer{ch})
+	http.Handle("/cancel", CancelHandler{ch})
+	http.Handle("/suspend", SuspendHandler{ch, suspendSecCh})
 	s := http.Server{}
 
 	go func() {
@@ -172,7 +216,9 @@ func waitWithCancelServer(sleepSec int, port int) (bool, error) {
 					return
 				}
 			case suspendSec := <-suspendSecCh:
-				baseTime.Add(time.Duration(suspendSec) * time.Second)
+				message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.", suspendSec)
+				slack.teeMessage(message)
+				baseTime = baseTime.Add(time.Duration(suspendSec) * time.Second)
 			default:
 			}
 
