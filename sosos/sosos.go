@@ -18,6 +18,8 @@ import (
 
 	"net/url"
 
+	"bufio"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -166,13 +168,34 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		}
 		fmt.Println("http response " + res.Status)
 
-		out, err := exec.Command(commands[0], commands[1:]...).CombinedOutput()
+		cmd := exec.Command(commands[0], commands[1:]...)
+		stdout, err := cmd.StdoutPipe()
+
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		cmd.Start()
+
+		var results []string
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			text := scanner.Text()
+			fmt.Println(text)
+			results = append(results, text)
+		}
+
+		cmd.Wait()
+
 		if err != nil {
 			return err
 		}
 
+		fmt.Println("finish!")
+
 		if !noResultFlag {
-			resultRes, err := slack.teeMessage(fmt.Sprintf("result:\n```\n%s```", string(out)))
+			resultRes, err := slack.postMessage(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n")))
 			if err != nil {
 				return err
 			}
