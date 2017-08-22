@@ -116,7 +116,7 @@ func (s *Slack) postMessage(message string) (*http.Response, error) {
 	return res, nil
 }
 
-func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool) error {
+func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, customMessage string) error {
 	suspendSecCh := make(chan int)
 	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
@@ -129,7 +129,11 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		return err
 	}
 
-	message := fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
+	message := customMessage
+	if message != "" {
+		message += "\n"
+	}
+	message += fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
 		strings.Join(commands, " "),
 		sleepSec,
 		time.Now().Add(time.Duration(sleepSec)*time.Second).Format("01/02 15:04:05"),
