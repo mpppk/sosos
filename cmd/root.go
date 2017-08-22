@@ -15,7 +15,7 @@ import (
 )
 
 var cfgFile string
-var sleepSec int
+var sleepSec int64
 var port int
 var insecureFlag bool
 var versionFlag bool
@@ -68,7 +68,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.sosos.yaml)")
-	RootCmd.PersistentFlags().IntVarP(&sleepSec, "sleep", "s", 60*15, "Sleep time(sec)")
+	RootCmd.PersistentFlags().Int64VarP(&sleepSec, "sleep", "s", 60*15, "Sleep time(sec)")
 	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "Port of cancel server")
 	RootCmd.PersistentFlags().BoolVarP(&insecureFlag, "insecure-server", "i", false, "Use http protocol for cancel server")
 	RootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "Print version")

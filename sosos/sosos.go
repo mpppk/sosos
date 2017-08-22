@@ -116,7 +116,7 @@ func (s *Slack) postMessage(message string) (*http.Response, error) {
 	return res, nil
 }
 
-func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool) error {
+func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool) error {
 	suspendSecCh := make(chan int)
 	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
@@ -185,7 +185,17 @@ func Execute(commands []string, sleepSec int, port int, insecureFlag bool, webho
 	return nil
 }
 
-func waitWithCancelServer(sleepSec int, port int, suspendSecCh chan int, slack Slack) (bool, error) {
+func remove(numbers []int64, search int64) []int64 {
+	result := []int64{}
+	for _, num := range numbers {
+		if num != search {
+			result = append(result, num)
+		}
+	}
+	return result
+}
+
+func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack Slack) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false, err
@@ -205,10 +215,17 @@ func waitWithCancelServer(sleepSec int, port int, suspendSecCh chan int, slack S
 	}()
 
 	go func() {
-		baseTime := time.Now()
+		executeTime := time.Now().Add(time.Duration(sleepSec) * time.Second)
 		ticker := time.NewTicker(500 * time.Millisecond)
 
-		for t := range ticker.C {
+		remindSeconds := []int64{60, 300}
+		for _, second := range remindSeconds {
+			if second > sleepSec {
+				remindSeconds = remove(remindSeconds, second)
+			}
+		}
+
+		for range ticker.C {
 			select {
 			case state := <-ch:
 				switch state {
@@ -218,13 +235,23 @@ func waitWithCancelServer(sleepSec int, port int, suspendSecCh chan int, slack S
 			case suspendSec := <-suspendSecCh:
 				message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.", suspendSec)
 				slack.teeMessage(message)
-				baseTime = baseTime.Add(time.Duration(suspendSec) * time.Second)
+				executeTime = executeTime.Add(time.Duration(suspendSec) * time.Second)
 			default:
 			}
 
-			if t.Sub(baseTime).Seconds() > float64(sleepSec) {
+			remainSec := executeTime.Unix() - time.Now().Unix()
+			if remainSec <= 0 {
 				ch <- STATE_SLEEP_FINISHED
 				return
+			}
+
+			for _, second := range remindSeconds {
+				if second > remainSec {
+					message := fmt.Sprintf("Remind: The command will be executed after %d seconds\n",
+						remainSec)
+					slack.teeMessage(message)
+					remindSeconds = remove(remindSeconds, second)
+				}
 			}
 		}
 	}()
