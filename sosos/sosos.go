@@ -172,11 +172,14 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		stdout, err := cmd.StdoutPipe()
 
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			return err
 		}
 
-		cmd.Start()
+		err = cmd.Start()
+
+		if err != nil {
+			return err
+		}
 
 		var results []string
 		scanner := bufio.NewScanner(stdout)
@@ -186,7 +189,11 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 			results = append(results, text)
 		}
 
-		cmd.Wait()
+		err = cmd.Wait()
+
+		if err != nil {
+			return err
+		}
 
 		if err != nil {
 			return err
