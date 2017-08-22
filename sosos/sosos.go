@@ -129,9 +129,10 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		return err
 	}
 
-	message := fmt.Sprintf("The command `%s` will be executed after %d seconds on `%s`\n",
+	message := fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
 		strings.Join(commands, " "),
 		sleepSec,
+		time.Now().Add(time.Duration(sleepSec)*time.Second).Format("01/02 15:04:05"),
 		u.Hostname())
 
 	if !noCancelLinkFlag {
@@ -233,9 +234,12 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 					return
 				}
 			case suspendSec := <-suspendSecCh:
-				message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.", suspendSec)
-				slack.teeMessage(message)
 				executeTime = executeTime.Add(time.Duration(suspendSec) * time.Second)
+				message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.(%s)",
+					suspendSec,
+					executeTime.Format("01/02 15:04:05"),
+				)
+				slack.teeMessage(message)
 			default:
 			}
 
@@ -247,8 +251,10 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 
 			for _, second := range remindSeconds {
 				if second > remainSec {
-					message := fmt.Sprintf("Remind: The command will be executed after %d seconds\n",
-						remainSec)
+					message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
+						remainSec,
+						executeTime.Format("01/02 15:04:05"),
+					)
 					slack.teeMessage(message)
 					remindSeconds = remove(remindSeconds, second)
 				}
