@@ -2,11 +2,9 @@ package sosos
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os/exec"
-	"strconv"
 	"time"
 
 	"os"
@@ -33,56 +31,6 @@ const (
 	STATE_CANCELED = iota + 1
 	STATE_SLEEP_FINISHED
 )
-
-type CancelHandler struct {
-	Ch chan int
-}
-
-func (c CancelHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintln(rw, "Cancel request is accepted")
-	go func() {
-		c.Ch <- STATE_CANCELED
-	}()
-}
-
-type SuspendHandler struct {
-	Ch           chan int
-	SuspendSecCh chan int
-}
-
-func (s SuspendHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	err := req.ParseForm()
-	if err != nil {
-		fmt.Fprintln(rw, "Query parsing failed")
-		log.Println("Query parsing failed")
-		return
-	}
-
-	suspendSecStrs, ok := req.Form["suspendSec"]
-	if !ok || suspendSecStrs == nil || len(suspendSecStrs) < 1 {
-		rw.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(rw, "Parameter named \"SuspendSec\" is not found in request")
-		log.Println("Parameter named \"SuspendSec\" is not found in request")
-		return
-	}
-
-	suspendSec, err := strconv.Atoi(suspendSecStrs[0])
-
-	if err != nil {
-		rw.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(rw, "Parameter named \"SuspendSec\" is invalid in request")
-		log.Println(err)
-		return
-	}
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "Suspend request(%d seconds) is accepted\n", suspendSec)
-
-	go func() {
-		//s.Ch <- STATE_SUSPENDED
-		s.SuspendSecCh <- suspendSec
-	}()
-}
 
 func getCancelServerUrl(insecureFlag bool, port int) (string, error) {
 	protocol := "http"
@@ -247,7 +195,7 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 
 	ch := make(chan int)
 	http.Handle("/cancel", CancelHandler{ch})
-	http.Handle("/suspend", SuspendHandler{ch, suspendSecCh})
+	http.Handle("/suspend", SuspendHandler{suspendSecCh})
 	s := http.Server{}
 
 	go func() {
