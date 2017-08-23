@@ -21,6 +21,7 @@ var insecureFlag bool
 var versionFlag bool
 var noResultFlag bool
 var noCancelLinkFlag bool
+var noScriptContentFlag bool
 var argWebhook string
 var message string
 
@@ -51,7 +52,7 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl, noResultFlag, noCancelLinkFlag, message); err != nil {
+		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl, noResultFlag, noCancelLinkFlag, noScriptContentFlag, message); err != nil {
 			fmt.Println(err)
 		}
 	},
@@ -76,6 +77,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&argWebhook, "webhook", "w", "", "Webhook URL")
 	RootCmd.PersistentFlags().BoolVar(&noResultFlag, "no-result", false, "Not display results of command")
 	RootCmd.PersistentFlags().BoolVar(&noCancelLinkFlag, "no-cancel-link", false, "Not display cancel link")
+	RootCmd.PersistentFlags().BoolVar(&noScriptContentFlag, "no-script-content", false, "Not display script content")
 	RootCmd.PersistentFlags().StringVarP(&message, "message", "m", "", "Send custom message to chat")
 }
 

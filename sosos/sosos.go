@@ -130,7 +130,7 @@ func isScript(fileName string) bool {
 	return false
 }
 
-func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, customMessage string) error {
+func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, noScriptContentFlag bool, customMessage string) error {
 	suspendSecCh := make(chan int)
 	slack := Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
@@ -153,15 +153,17 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		time.Now().Add(time.Duration(sleepSec)*time.Second).Format("01/02 15:04:05"),
 		u.Hostname())
 
-	for _, command := range commands {
-		if isScript(command) {
-			fileBytes, err := ioutil.ReadFile(command)
-			if err != nil {
-				return err
-			}
+	if !noScriptContentFlag {
+		for _, command := range commands {
+			if isScript(command) {
+				fileBytes, err := ioutil.ReadFile(command)
+				if err != nil {
+					return err
+				}
 
-			message += fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes))
-			break
+				message += fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes))
+				break
+			}
 		}
 	}
 
