@@ -24,6 +24,9 @@ import (
 
 	"sync"
 
+	"os/signal"
+	"syscall"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -309,6 +312,9 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 			}
 		}
 
+		sigintCh := make(chan os.Signal, 1)
+		signal.Notify(sigintCh, syscall.SIGINT)
+
 		for range ticker.C {
 			select {
 			case state := <-ch:
@@ -323,6 +329,9 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 					executeTime.Format("01/02 15:04:05"),
 				)
 				slack.teeMessage(message)
+			case <-sigintCh:
+				slack.teeMessage("The command is terminated by SIGINT signal")
+				os.Exit(0)
 			default:
 			}
 
