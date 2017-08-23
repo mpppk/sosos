@@ -22,6 +22,8 @@ import (
 
 	"io/ioutil"
 
+	"sync"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -187,6 +189,7 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		return err
 	}
 
+	var cmdErr error
 	if !isCanceled {
 		res, err := slack.teeMessage("Command execution is started!")
 		if err != nil {
@@ -196,33 +199,53 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 
 		cmd := exec.Command(commands[0], commands[1:]...)
 		stdout, err := cmd.StdoutPipe()
-
+		if err != nil {
+			return err
+		}
+		stderr, err := cmd.StderrPipe()
 		if err != nil {
 			return err
 		}
 
-		err = cmd.Start()
-
-		if err != nil {
+		if err := cmd.Start(); err != nil {
 			return err
 		}
+
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+		resultCh := make(chan string, 0)
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				text := scanner.Text()
+				fmt.Println(text)
+				resultCh <- text
+			}
+			wg.Done()
+		}()
+
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				text := scanner.Text()
+				fmt.Println(text)
+				resultCh <- text
+			}
+			wg.Done()
+		}()
+
+		go func() {
+			wg.Wait()
+			close(resultCh)
+		}()
 
 		var results []string
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			text := scanner.Text()
-			fmt.Println(text)
-			results = append(results, text)
+		for result := range resultCh {
+			results = append(results, result)
 		}
 
-		err = cmd.Wait()
-
-		if err != nil {
-			return err
-		}
-
-		if err != nil {
-			return err
+		if err := cmd.Wait(); err != nil {
+			cmdErr = err
 		}
 
 		fmt.Println("finish!")
@@ -243,7 +266,7 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		}
 		fmt.Println("http response " + res.Status)
 	}
-	return nil
+	return cmdErr
 }
 
 func remove(numbers []int64, search int64) []int64 {
