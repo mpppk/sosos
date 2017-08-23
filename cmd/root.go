@@ -8,6 +8,9 @@ import (
 
 	"log"
 
+	"path/filepath"
+
+	"github.com/mitchellh/go-homedir"
 	"github.com/mpppk/sosos/etc"
 	"github.com/mpppk/sosos/sosos"
 	"github.com/spf13/cobra"
@@ -87,10 +90,14 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
-	viper.SetConfigName(".sosos")          // name of config file (without extension)
-	viper.AddConfigPath(os.Getenv("HOME")) // adding home directory as first search path
-	viper.AddConfigPath(os.Getenv("USERPROFILE"))
-	viper.AutomaticEnv() // read in environment variables that match
+	viper.SetConfigName(".sosos") // name of config file (without extension)
+
+	homeDir, err := homedir.Dir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	viper.AddConfigPath(filepath.Join(homeDir, ".config", "sosos")) // adding home directory as first search path
+	viper.AutomaticEnv()                                            // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
