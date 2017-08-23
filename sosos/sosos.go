@@ -26,6 +26,7 @@ import (
 
 	"github.com/hydrogen18/stoppableListener"
 	"github.com/mpppk/sosos/chat"
+	"github.com/mpppk/sosos/etc"
 )
 
 const (
@@ -97,16 +98,6 @@ func getCancelServerUrl(insecureFlag bool, port int) (string, error) {
 	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
 }
 
-func isScript(fileName string) bool {
-	scriptExtList := []string{"sh", "bat", "ps1", "rb", "py", "pl", "php"}
-	for _, ext := range scriptExtList {
-		if strings.Contains(fileName, "."+ext) {
-			return true
-		}
-	}
-	return false
-}
-
 func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, noScriptContentFlag bool, customMessage string) error {
 	suspendSecCh := make(chan int)
 	slack := &chat.Slack{WebhookUrl: webhookUrl}
@@ -132,7 +123,7 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 
 	if !noScriptContentFlag {
 		for _, command := range commands {
-			if isScript(command) {
+			if etc.IsScript(command) {
 				fileBytes, err := ioutil.ReadFile(command)
 				if err != nil {
 					return err
@@ -244,16 +235,6 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 	return cmdErr
 }
 
-func remove(numbers []int64, search int64) []int64 {
-	result := []int64{}
-	for _, num := range numbers {
-		if num != search {
-			result = append(result, num)
-		}
-	}
-	return result
-}
-
 func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack *chat.Slack) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -280,7 +261,7 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 		remindSeconds := []int64{60, 300}
 		for _, second := range remindSeconds {
 			if second > sleepSec {
-				remindSeconds = remove(remindSeconds, second)
+				remindSeconds = etc.Remove(remindSeconds, second)
 			}
 		}
 
@@ -320,7 +301,7 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 						executeTime.Format("01/02 15:04:05"),
 					)
 					slack.TeeMessage(message)
-					remindSeconds = remove(remindSeconds, second)
+					remindSeconds = etc.Remove(remindSeconds, second)
 				}
 			}
 		}
