@@ -1,7 +1,6 @@
 package sosos
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	"os"
-
-	"bytes"
 
 	"strings"
 
@@ -28,16 +25,13 @@ import (
 	"syscall"
 
 	"github.com/hydrogen18/stoppableListener"
+	"github.com/mpppk/sosos/chat"
 )
 
 const (
 	STATE_CANCELED = iota + 1
 	STATE_SLEEP_FINISHED
 )
-
-type SlackWebhookContent struct {
-	Text string `json:"text"`
-}
 
 type CancelHandler struct {
 	Ch chan int
@@ -103,28 +97,6 @@ func getCancelServerUrl(insecureFlag bool, port int) (string, error) {
 	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
 }
 
-type Slack struct {
-	WebhookUrl string
-}
-
-func (s *Slack) teeMessage(message string) (*http.Response, error) {
-	fmt.Println(message)
-	return s.postMessage(message)
-}
-
-func (s *Slack) postMessage(message string) (*http.Response, error) {
-	content, err := json.Marshal(SlackWebhookContent{Text: message})
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := http.Post(s.WebhookUrl, "application/json", bytes.NewReader(content))
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
 func isScript(fileName string) bool {
 	scriptExtList := []string{"sh", "bat", "ps1", "rb", "py", "pl", "php"}
 	for _, ext := range scriptExtList {
@@ -137,7 +109,7 @@ func isScript(fileName string) bool {
 
 func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, noScriptContentFlag bool, customMessage string) error {
 	suspendSecCh := make(chan int)
-	slack := Slack{WebhookUrl: webhookUrl}
+	slack := &chat.Slack{WebhookUrl: webhookUrl}
 	cancelServerUrl, err := getCancelServerUrl(insecureFlag, port)
 	if err != nil {
 		return err
@@ -180,7 +152,7 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		message += fmt.Sprintf("[Suspend 60 minutes](%s/suspend?suspendSec=3600)\n", cancelServerUrl)
 	}
 
-	res, err := slack.teeMessage(message)
+	res, err := slack.TeeMessage(message)
 	if err != nil {
 		return err
 	}
@@ -194,7 +166,7 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 
 	var cmdErr error
 	if !isCanceled {
-		res, err := slack.teeMessage("Command execution is started!")
+		res, err := slack.TeeMessage("Command execution is started!")
 		if err != nil {
 			return err
 		}
@@ -254,16 +226,16 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		fmt.Println("finish!")
 
 		if !noResultFlag {
-			resultRes, err := slack.postMessage(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n")))
+			resultRes, err := slack.PostMessage(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n")))
 			if err != nil {
 				return err
 			}
 			fmt.Println("http response " + resultRes.Status)
 		} else {
-			slack.teeMessage("finish!")
+			slack.TeeMessage("finish!")
 		}
 	} else {
-		res, err := slack.teeMessage("Command is canceled")
+		res, err := slack.TeeMessage("Command is canceled")
 		if err != nil {
 			return err
 		}
@@ -282,7 +254,7 @@ func remove(numbers []int64, search int64) []int64 {
 	return result
 }
 
-func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack Slack) (bool, error) {
+func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack *chat.Slack) (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false, err
@@ -328,9 +300,9 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 					suspendSec,
 					executeTime.Format("01/02 15:04:05"),
 				)
-				slack.teeMessage(message)
+				slack.TeeMessage(message)
 			case <-sigintCh:
-				slack.teeMessage("The command is terminated by SIGINT signal")
+				slack.TeeMessage("The command is terminated by SIGINT signal")
 				os.Exit(0)
 			default:
 			}
@@ -347,7 +319,7 @@ func waitWithCancelServer(sleepSec int64, port int, suspendSecCh chan int, slack
 						remainSec,
 						executeTime.Format("01/02 15:04:05"),
 					)
-					slack.teeMessage(message)
+					slack.TeeMessage(message)
 					remindSeconds = remove(remindSeconds, second)
 				}
 			}
