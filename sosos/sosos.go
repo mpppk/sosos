@@ -20,6 +20,8 @@ import (
 
 	"bufio"
 
+	"io/ioutil"
+
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -118,6 +120,16 @@ func (s *Slack) postMessage(message string) (*http.Response, error) {
 	return res, nil
 }
 
+func isScript(fileName string) bool {
+	scriptExtList := []string{"sh", "bat", "ps1", "rb", "py", "pl", "php"}
+	for _, ext := range scriptExtList {
+		if strings.Contains(fileName, "."+ext) {
+			return true
+		}
+	}
+	return false
+}
+
 func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, webhookUrl string, noResultFlag bool, noCancelLinkFlag bool, customMessage string) error {
 	suspendSecCh := make(chan int)
 	slack := Slack{WebhookUrl: webhookUrl}
@@ -140,6 +152,18 @@ func Execute(commands []string, sleepSec int64, port int, insecureFlag bool, web
 		sleepSec,
 		time.Now().Add(time.Duration(sleepSec)*time.Second).Format("01/02 15:04:05"),
 		u.Hostname())
+
+	for _, command := range commands {
+		if isScript(command) {
+			fileBytes, err := ioutil.ReadFile(command)
+			if err != nil {
+				return err
+			}
+
+			message += fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes))
+			break
+		}
+	}
 
 	if !noCancelLinkFlag {
 		message += "If you want to suspend or cancel this command, please click the following Link\n"
