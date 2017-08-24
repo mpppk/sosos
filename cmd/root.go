@@ -55,7 +55,17 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		if err := sosos.Execute(args, sleepSec, port, insecureFlag, webhookUrl, noResultFlag, noCancelLinkFlag, noScriptContentFlag, message); err != nil {
+		executor := sosos.NewExecutor(args, &sosos.ExecutorOption{
+			SleepSec:            sleepSec,
+			Port:                port,
+			WebhookUrl:          webhookUrl,
+			InsecureFlag:        insecureFlag,
+			NoResultFlag:        noResultFlag,
+			NoCancelLinkFlag:    noCancelLinkFlag,
+			NoScriptContentFlag: noScriptContentFlag,
+			CustomMessage:       message,
+		})
+		if err := executor.Execute(); err != nil {
 			fmt.Println(err)
 		}
 	},
