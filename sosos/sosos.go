@@ -35,9 +35,10 @@ const (
 )
 
 type Executor struct {
-	Commands []string
-	slack    *chat.Slack
-	opt      *ExecutorOption
+	Commands      []string
+	remindSeconds []int64
+	slack         *chat.Slack
+	opt           *ExecutorOption
 }
 
 type ExecutorOption struct {
@@ -54,10 +55,100 @@ type ExecutorOption struct {
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
 	return &Executor{
-		Commands: commands,
-		slack:    slack,
-		opt:      opt,
+		Commands:      commands,
+		remindSeconds: []int64{60, 300},
+		slack:         slack,
+		opt:           opt,
 	}
+}
+
+func generateCancelAndSuspendMessage(cancelServerUrl string, suspendMins []int64) string {
+	message := "If you want to suspend or cancel this command, please click the following Link\n"
+	message += fmt.Sprintf("[Cancel](%s/cancel)\n", cancelServerUrl)
+	for _, suspendMin := range suspendMins {
+		message += fmt.Sprintf("[Suspend  %d minutes](%s/suspend?suspendSec=%d)\n",
+			suspendMin,
+			cancelServerUrl,
+			suspendMin*60)
+	}
+
+	return message
+}
+
+func getScriptContentMessage(commands []string) (string, bool, error) {
+	for _, command := range commands {
+		if etc.IsScript(command) {
+			fileBytes, err := ioutil.ReadFile(command)
+			if err != nil {
+				return "", false, err
+			}
+			return fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes)), true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func (e *Executor) ExecuteCommand() error {
+	var cmdErr error
+	if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
+		return err
+	}
+
+	cmd := exec.Command(e.Commands[0], e.Commands[1:]...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	resultCh := make(chan string, 0)
+
+	printByScanner := func(reader io.Reader) {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			text := scanner.Text()
+			fmt.Println(text)
+			resultCh <- text
+		}
+		wg.Done()
+	}
+
+	go printByScanner(stdout)
+	go printByScanner(stderr)
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	var results []string
+	for result := range resultCh {
+		results = append(results, result)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		cmdErr = err
+	}
+
+	fmt.Println("finish!")
+
+	if !e.opt.NoResultFlag {
+		if _, err := e.teeMessageWithCode(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))); err != nil {
+			return err
+		}
+	} else {
+		e.slack.TeeMessage("finish!")
+	}
+	return cmdErr
 }
 
 func (e *Executor) Execute() error {
@@ -83,105 +174,37 @@ func (e *Executor) Execute() error {
 		u.Hostname())
 
 	if !e.opt.NoScriptContentFlag {
-		for _, command := range e.Commands {
-			if etc.IsScript(command) {
-				fileBytes, err := ioutil.ReadFile(command)
-				if err != nil {
-					return err
-				}
-
-				message += fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes))
-				break
-			}
+		contentMessage, ok, err := getScriptContentMessage(e.Commands)
+		if ok {
+			message += contentMessage
+		} else if err != nil {
+			return err
 		}
 	}
 
 	if !e.opt.NoCancelLinkFlag {
-		message += "If you want to suspend or cancel this command, please click the following Link\n"
-		message += fmt.Sprintf("[Cancel](%s/cancel)\n", cancelServerUrl)
-		message += fmt.Sprintf("[Suspend  5 minutes](%s/suspend?suspendSec=300)\n", cancelServerUrl)
-		message += fmt.Sprintf("[Suspend 20 minutes](%s/suspend?suspendSec=1200)\n", cancelServerUrl)
-		message += fmt.Sprintf("[Suspend 60 minutes](%s/suspend?suspendSec=3600)\n", cancelServerUrl)
+		message += generateCancelAndSuspendMessage(cancelServerUrl, []int64{5, 20, 60})
 	}
 
-	res, err := e.slack.TeeMessage(message)
-	if err != nil {
+	if _, err := e.teeMessageWithCode(message); err != nil {
 		return err
 	}
-
-	fmt.Println("http response " + res.Status)
 
 	isCanceled, err := e.waitWithCancelServer(suspendSecCh)
 	if err != nil {
 		return err
 	}
 
-	var cmdErr error
 	if !isCanceled {
-		if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
+		if err := e.ExecuteCommand(); err != nil {
 			return err
-		}
-
-		cmd := exec.Command(e.Commands[0], e.Commands[1:]...)
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return err
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return err
-		}
-
-		if err := cmd.Start(); err != nil {
-			return err
-		}
-
-		wg := &sync.WaitGroup{}
-		wg.Add(2)
-		resultCh := make(chan string, 0)
-
-		printByScanner := func(reader io.Reader) {
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				text := scanner.Text()
-				fmt.Println(text)
-				resultCh <- text
-			}
-			wg.Done()
-		}
-
-		go printByScanner(stdout)
-		go printByScanner(stderr)
-
-		go func() {
-			wg.Wait()
-			close(resultCh)
-		}()
-
-		var results []string
-		for result := range resultCh {
-			results = append(results, result)
-		}
-
-		if err := cmd.Wait(); err != nil {
-			cmdErr = err
-		}
-
-		fmt.Println("finish!")
-
-		if !e.opt.NoResultFlag {
-			if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
-				return err
-			}
-		} else {
-			e.slack.TeeMessage("finish!")
 		}
 	} else {
-		if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
+		if _, err := e.teeMessageWithCode("Command is canceled!"); err != nil {
 			return err
 		}
 	}
-	return cmdErr
+	return nil
 }
 
 func (e *Executor) waitWithCancelServer(suspendSecCh chan int) (bool, error) {
@@ -207,10 +230,9 @@ func (e *Executor) waitWithCancelServer(suspendSecCh chan int) (bool, error) {
 		executeTime := time.Now().Add(time.Duration(e.opt.SleepSec) * time.Second)
 		ticker := time.NewTicker(500 * time.Millisecond)
 
-		remindSeconds := []int64{60, 300}
-		for _, second := range remindSeconds {
+		for _, second := range e.remindSeconds {
 			if second > e.opt.SleepSec {
-				remindSeconds = etc.Remove(remindSeconds, second)
+				e.remindSeconds = etc.Remove(e.remindSeconds, second)
 			}
 		}
 
@@ -243,14 +265,14 @@ func (e *Executor) waitWithCancelServer(suspendSecCh chan int) (bool, error) {
 				return
 			}
 
-			for _, second := range remindSeconds {
+			for _, second := range e.remindSeconds {
 				if second > remainSec {
 					message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
 						remainSec,
 						executeTime.Format("01/02 15:04:05"),
 					)
 					e.slack.TeeMessage(message)
-					remindSeconds = etc.Remove(remindSeconds, second)
+					e.remindSeconds = etc.Remove(e.remindSeconds, second)
 				}
 			}
 		}
