@@ -15,8 +15,6 @@ import (
 
 	"bufio"
 
-	"io/ioutil"
-
 	"sync"
 
 	"os/signal"
@@ -26,7 +24,6 @@ import (
 
 	"github.com/hydrogen18/stoppableListener"
 	"github.com/mpppk/sosos/chat"
-	"github.com/mpppk/sosos/etc"
 )
 
 const (
@@ -39,6 +36,7 @@ type Executor struct {
 	ch           chan int
 	suspendSecCh chan int
 	slack        *chat.Slack
+	timeKeeper   *TimeKeeper
 	opt          *ExecutorOption
 }
 
@@ -58,41 +56,16 @@ type ExecutorOption struct {
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
 	opt.SuspendMins = []int64{5, 20, 60}
-	opt.RemindSeconds = []int64{60, 300}
+	opt.RemindSeconds = []int64{2, 60, 300}
 
 	return &Executor{
 		Commands:     commands,
 		ch:           make(chan int),
 		suspendSecCh: make(chan int),
 		slack:        slack,
+		timeKeeper:   NewTimeKeeper(opt.SleepSec, opt.RemindSeconds, opt.SuspendMins),
 		opt:          opt,
 	}
-}
-
-func generateCancelAndSuspendMessage(cancelServerUrl string, suspendMins []int64) string {
-	message := "If you want to suspend or cancel this command, please click the following Link\n"
-	message += fmt.Sprintf("[Cancel](%s/cancel)\n", cancelServerUrl)
-	for _, suspendMin := range suspendMins {
-		message += fmt.Sprintf("[Suspend  %d minutes](%s/suspend?suspendSec=%d)\n",
-			suspendMin,
-			cancelServerUrl,
-			suspendMin*60)
-	}
-
-	return message
-}
-
-func getScriptContentMessage(commands []string) (string, bool, error) {
-	for _, command := range commands {
-		if etc.IsScript(command) {
-			fileBytes, err := ioutil.ReadFile(command)
-			if err != nil {
-				return "", false, err
-			}
-			return fmt.Sprintf("`%s` contents:\n```\n%s\n```\n", command, string(fileBytes)), true, nil
-		}
-	}
-	return "", false, nil
 }
 
 func (e *Executor) ExecuteCommand() error {
@@ -173,8 +146,8 @@ func (e *Executor) Execute() error {
 	}
 	message += fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
 		strings.Join(e.Commands, " "),
-		e.opt.SleepSec,
-		time.Now().Add(time.Duration(e.opt.SleepSec)*time.Second).Format("01/02 15:04:05"),
+		e.timeKeeper.sleepSec,
+		e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 		u.Hostname())
 
 	if !e.opt.NoScriptContentFlag {
@@ -212,14 +185,7 @@ func (e *Executor) Execute() error {
 }
 
 func (e *Executor) tick() {
-	executeTime := time.Now().Add(time.Duration(e.opt.SleepSec) * time.Second)
 	ticker := time.NewTicker(500 * time.Millisecond)
-
-	for _, second := range e.opt.RemindSeconds {
-		if second > e.opt.SleepSec {
-			e.opt.RemindSeconds = etc.Remove(e.opt.RemindSeconds, second)
-		}
-	}
 
 	sigintCh := make(chan os.Signal, 1)
 	signal.Notify(sigintCh, syscall.SIGINT)
@@ -232,10 +198,10 @@ func (e *Executor) tick() {
 				return
 			}
 		case suspendSec := <-e.suspendSecCh:
-			executeTime = executeTime.Add(time.Duration(suspendSec) * time.Second)
+			e.timeKeeper.SuspendCommandExecuteTime(suspendSec)
 			message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.(%s)",
 				suspendSec,
-				executeTime.Format("01/02 15:04:05"),
+				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 			)
 			e.slack.TeeMessage(message)
 		case <-sigintCh:
@@ -244,21 +210,18 @@ func (e *Executor) tick() {
 		default:
 		}
 
-		remainSec := executeTime.Unix() - time.Now().Unix()
-		if remainSec <= 0 {
+		e.timeKeeper.UpdateRemainSec()
+		if e.timeKeeper.remainSec <= 0 {
 			e.ch <- STATE_SLEEP_FINISHED
 			return
 		}
 
-		for _, second := range e.opt.RemindSeconds {
-			if second > remainSec {
-				message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
-					remainSec,
-					executeTime.Format("01/02 15:04:05"),
-				)
-				e.slack.TeeMessage(message)
-				e.opt.RemindSeconds = etc.Remove(e.opt.RemindSeconds, second)
-			}
+		if remainSec, ok := e.timeKeeper.GetNewRemind(); ok {
+			message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
+				remainSec,
+				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
+			)
+			e.slack.TeeMessage(message)
 		}
 	}
 }
@@ -283,20 +246,6 @@ func (e *Executor) waitWithCancelServer() (bool, error) {
 	sl.Stop()
 
 	return state == STATE_CANCELED, nil
-}
-
-func getCancelServerUrl(port int, insecureFlag bool) (string, error) {
-	protocol := "http"
-	if !insecureFlag {
-		protocol = protocol + "s"
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
 }
 
 func (e *Executor) teeMessageWithCode(message string) (*http.Response, error) {
