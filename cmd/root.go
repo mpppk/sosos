@@ -67,6 +67,7 @@ var RootCmd = &cobra.Command{
 		})
 		if err := executor.Execute(); err != nil {
 			fmt.Println(err)
+			os.Exit(1)
 		}
 	},
 	Args: cobra.MinimumNArgs(1),

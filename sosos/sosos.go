@@ -68,24 +68,19 @@ func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	}
 }
 
-func (e *Executor) ExecuteCommand() error {
-	var cmdErr error
-	if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
-		return err
-	}
-
+func (e *Executor) ExecuteCommand() ([]string, error) {
 	cmd := exec.Command(e.Commands[0], e.Commands[1:]...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return nil, err
 	}
 
 	wg := &sync.WaitGroup{}
@@ -115,18 +110,7 @@ func (e *Executor) ExecuteCommand() error {
 		results = append(results, result)
 	}
 
-	if err := cmd.Wait(); err != nil {
-		cmdErr = err
-	}
-
-	if !e.opt.NoResultFlag {
-		if _, err := e.teeMessageWithCode(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))); err != nil {
-			return err
-		}
-	} else {
-		e.slack.TeeMessage("finish!")
-	}
-	return cmdErr
+	return results, cmd.Wait()
 }
 
 func (e *Executor) Execute() error {
@@ -173,9 +157,19 @@ func (e *Executor) Execute() error {
 	}
 
 	if !isCanceled {
-		if err := e.ExecuteCommand(); err != nil {
+		if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
 			return err
 		}
+		results, cmdErr := e.ExecuteCommand()
+		if !e.opt.NoResultFlag {
+			fmt.Println("result", results)
+			if _, err := e.teeMessageWithCode(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))); err != nil {
+				return err
+			}
+		} else {
+			e.slack.TeeMessage("finish!")
+		}
+		return cmdErr
 	} else {
 		if _, err := e.teeMessageWithCode("Command is canceled!"); err != nil {
 			return err
