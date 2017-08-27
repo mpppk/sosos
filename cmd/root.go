@@ -66,7 +66,6 @@ var RootCmd = &cobra.Command{
 			CustomMessage:       message,
 		})
 		if err := executor.Execute(); err != nil {
-			fmt.Println(err)
 			os.Exit(1)
 		}
 	},

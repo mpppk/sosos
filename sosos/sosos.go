@@ -55,7 +55,7 @@ type ExecutorOption struct {
 
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
-	opt.SuspendMins = []int64{5, 20, 60}
+	opt.SuspendMins = []int64{1, 5, 20, 60}
 	opt.RemindSeconds = []int64{2, 60, 300}
 
 	return &Executor{
@@ -144,7 +144,7 @@ func (e *Executor) Execute() error {
 	}
 
 	if !e.opt.NoCancelLinkFlag {
-		message += generateCancelAndSuspendMessage(cancelServerUrl, []int64{5, 20, 60})
+		message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes)
 	}
 
 	if _, err := e.teeMessageWithCode(message); err != nil {
@@ -193,7 +193,7 @@ func (e *Executor) tick() {
 			}
 		case suspendSec := <-e.suspendSecCh:
 			e.timeKeeper.SuspendCommandExecuteTime(suspendSec)
-			message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.(%s)",
+			message := fmt.Sprintf("Time to command execution has been suspended by %d seconds. (%s)",
 				suspendSec,
 				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 			)

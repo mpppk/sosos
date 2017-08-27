@@ -8,6 +8,7 @@ import (
 
 type TimeKeeper struct {
 	sleepSec           int64
+	orgRemindSeconds   []int64
 	remindSeconds      []int64
 	suspendMinutes     []int64
 	commandExecuteTime time.Time
@@ -20,23 +21,30 @@ func NewTimeKeeper(sleepSec int64, remindSeconds []int64, suspendMins []int64) *
 
 	t := &TimeKeeper{
 		sleepSec:           sleepSec,
+		orgRemindSeconds:   remindSeconds,
 		remindSeconds:      remindSeconds,
 		suspendMinutes:     suspendMins,
 		commandExecuteTime: commandExecuteTime,
 		remainSec:          remainSec,
 	}
 
-	for _, second := range t.remindSeconds {
-		if second > t.sleepSec {
+	t.UpdateRemindSeconds()
+	return t
+}
+
+func (t *TimeKeeper) UpdateRemindSeconds() {
+	t.UpdateRemainSec()
+	t.remindSeconds = t.orgRemindSeconds
+	for _, second := range t.orgRemindSeconds {
+		if second > t.remainSec {
 			t.remindSeconds = etc.Remove(t.remindSeconds, second)
 		}
 	}
-
-	return t
 }
 
 func (t *TimeKeeper) SuspendCommandExecuteTime(suspendSec int) {
 	t.commandExecuteTime = t.commandExecuteTime.Add(time.Duration(suspendSec) * time.Second)
+
 }
 
 func (t *TimeKeeper) UpdateRemainSec() {
