@@ -35,10 +35,11 @@ const (
 )
 
 type Executor struct {
-	Commands      []string
-	remindSeconds []int64
-	slack         *chat.Slack
-	opt           *ExecutorOption
+	Commands     []string
+	ch           chan int
+	suspendSecCh chan int
+	slack        *chat.Slack
+	opt          *ExecutorOption
 }
 
 type ExecutorOption struct {
@@ -50,15 +51,21 @@ type ExecutorOption struct {
 	NoCancelLinkFlag    bool
 	NoScriptContentFlag bool
 	CustomMessage       string
+	SuspendMins         []int64
+	RemindSeconds       []int64
 }
 
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
+	opt.SuspendMins = []int64{5, 20, 60}
+	opt.RemindSeconds = []int64{60, 300}
+
 	return &Executor{
-		Commands:      commands,
-		remindSeconds: []int64{60, 300},
-		slack:         slack,
-		opt:           opt,
+		Commands:     commands,
+		ch:           make(chan int),
+		suspendSecCh: make(chan int),
+		slack:        slack,
+		opt:          opt,
 	}
 }
 
@@ -139,8 +146,6 @@ func (e *Executor) ExecuteCommand() error {
 		cmdErr = err
 	}
 
-	fmt.Println("finish!")
-
 	if !e.opt.NoResultFlag {
 		if _, err := e.teeMessageWithCode(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))); err != nil {
 			return err
@@ -152,8 +157,7 @@ func (e *Executor) ExecuteCommand() error {
 }
 
 func (e *Executor) Execute() error {
-	suspendSecCh := make(chan int)
-	cancelServerUrl, err := e.getCancelServerUrl()
+	cancelServerUrl, err := getCancelServerUrl(e.opt.Port, e.opt.InsecureFlag)
 	if err != nil {
 		return err
 	}
@@ -190,7 +194,7 @@ func (e *Executor) Execute() error {
 		return err
 	}
 
-	isCanceled, err := e.waitWithCancelServer(suspendSecCh)
+	isCanceled, err := e.waitWithCancelServer()
 	if err != nil {
 		return err
 	}
@@ -207,7 +211,59 @@ func (e *Executor) Execute() error {
 	return nil
 }
 
-func (e *Executor) waitWithCancelServer(suspendSecCh chan int) (bool, error) {
+func (e *Executor) tick() {
+	executeTime := time.Now().Add(time.Duration(e.opt.SleepSec) * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+
+	for _, second := range e.opt.RemindSeconds {
+		if second > e.opt.SleepSec {
+			e.opt.RemindSeconds = etc.Remove(e.opt.RemindSeconds, second)
+		}
+	}
+
+	sigintCh := make(chan os.Signal, 1)
+	signal.Notify(sigintCh, syscall.SIGINT)
+
+	for range ticker.C {
+		select {
+		case state := <-e.ch:
+			switch state {
+			case STATE_CANCELED:
+				return
+			}
+		case suspendSec := <-e.suspendSecCh:
+			executeTime = executeTime.Add(time.Duration(suspendSec) * time.Second)
+			message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.(%s)",
+				suspendSec,
+				executeTime.Format("01/02 15:04:05"),
+			)
+			e.slack.TeeMessage(message)
+		case <-sigintCh:
+			e.slack.TeeMessage("The command is terminated by SIGINT signal")
+			os.Exit(0)
+		default:
+		}
+
+		remainSec := executeTime.Unix() - time.Now().Unix()
+		if remainSec <= 0 {
+			e.ch <- STATE_SLEEP_FINISHED
+			return
+		}
+
+		for _, second := range e.opt.RemindSeconds {
+			if second > remainSec {
+				message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
+					remainSec,
+					executeTime.Format("01/02 15:04:05"),
+				)
+				e.slack.TeeMessage(message)
+				e.opt.RemindSeconds = etc.Remove(e.opt.RemindSeconds, second)
+			}
+		}
+	}
+}
+
+func (e *Executor) waitWithCancelServer() (bool, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", e.opt.Port))
 	if err != nil {
 		return false, err
@@ -217,76 +273,21 @@ func (e *Executor) waitWithCancelServer(suspendSecCh chan int) (bool, error) {
 		return false, err
 	}
 
-	ch := make(chan int)
-	http.Handle("/cancel", CancelHandler{ch})
-	http.Handle("/suspend", SuspendHandler{suspendSecCh})
+	http.Handle("/cancel", CancelHandler{e.ch})
+	http.Handle("/suspend", SuspendHandler{e.suspendSecCh})
 	s := http.Server{}
 
-	go func() {
-		s.Serve(sl)
-	}()
-
-	go func() {
-		executeTime := time.Now().Add(time.Duration(e.opt.SleepSec) * time.Second)
-		ticker := time.NewTicker(500 * time.Millisecond)
-
-		for _, second := range e.remindSeconds {
-			if second > e.opt.SleepSec {
-				e.remindSeconds = etc.Remove(e.remindSeconds, second)
-			}
-		}
-
-		sigintCh := make(chan os.Signal, 1)
-		signal.Notify(sigintCh, syscall.SIGINT)
-
-		for range ticker.C {
-			select {
-			case state := <-ch:
-				switch state {
-				case STATE_CANCELED:
-					return
-				}
-			case suspendSec := <-suspendSecCh:
-				executeTime = executeTime.Add(time.Duration(suspendSec) * time.Second)
-				message := fmt.Sprintf("Time to command execution has been suspended by %d seconds.(%s)",
-					suspendSec,
-					executeTime.Format("01/02 15:04:05"),
-				)
-				e.slack.TeeMessage(message)
-			case <-sigintCh:
-				e.slack.TeeMessage("The command is terminated by SIGINT signal")
-				os.Exit(0)
-			default:
-			}
-
-			remainSec := executeTime.Unix() - time.Now().Unix()
-			if remainSec <= 0 {
-				ch <- STATE_SLEEP_FINISHED
-				return
-			}
-
-			for _, second := range e.remindSeconds {
-				if second > remainSec {
-					message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
-						remainSec,
-						executeTime.Format("01/02 15:04:05"),
-					)
-					e.slack.TeeMessage(message)
-					e.remindSeconds = etc.Remove(e.remindSeconds, second)
-				}
-			}
-		}
-	}()
-
-	state := <-ch
+	go s.Serve(sl)
+	go e.tick()
+	state := <-e.ch
 	sl.Stop()
 
 	return state == STATE_CANCELED, nil
 }
 
-func (e *Executor) getCancelServerUrl() (string, error) {
+func getCancelServerUrl(port int, insecureFlag bool) (string, error) {
 	protocol := "http"
-	if !e.opt.InsecureFlag {
+	if !insecureFlag {
 		protocol = protocol + "s"
 	}
 
@@ -295,7 +296,7 @@ func (e *Executor) getCancelServerUrl() (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s://%s:%d", protocol, hostname, e.opt.Port), nil
+	return fmt.Sprintf("%s://%s:%d", protocol, hostname, port), nil
 }
 
 func (e *Executor) teeMessageWithCode(message string) (*http.Response, error) {
