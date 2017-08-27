@@ -15,7 +15,7 @@ type TimeKeeper struct {
 	remainSec          int64
 }
 
-func NewTimeKeeper(sleepSec int64, remindSeconds []int64, suspendMins []int64) *TimeKeeper {
+func NewTimeKeeper(sleepSec int64, remindSeconds []int64, suspendMinutes []int64) *TimeKeeper {
 	commandExecuteTime := time.Now().Add(time.Duration(sleepSec) * time.Second)
 	remainSec := commandExecuteTime.Unix() - time.Now().Unix()
 
@@ -23,7 +23,7 @@ func NewTimeKeeper(sleepSec int64, remindSeconds []int64, suspendMins []int64) *
 		sleepSec:           sleepSec,
 		orgRemindSeconds:   remindSeconds,
 		remindSeconds:      remindSeconds,
-		suspendMinutes:     suspendMins,
+		suspendMinutes:     suspendMinutes,
 		commandExecuteTime: commandExecuteTime,
 		remainSec:          remainSec,
 	}

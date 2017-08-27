@@ -10,9 +10,12 @@ import (
 
 	"path/filepath"
 
+	"strconv"
+
 	"github.com/mitchellh/go-homedir"
 	"github.com/mpppk/sosos/etc"
 	"github.com/mpppk/sosos/sosos"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -27,6 +30,8 @@ var noCancelLinkFlag bool
 var noScriptContentFlag bool
 var argWebhook string
 var message string
+var suspendMinutesStr string
+var remindSecondsStr string
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
@@ -55,6 +60,24 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
+		suspendMinutes := []int64{}
+		for _, suspendMinuteStr := range strings.Split(suspendMinutesStr, ",") {
+			suspendMinute, err := strconv.Atoi(suspendMinuteStr)
+			if err != nil {
+				errors.New("suspend-minutes: invalid argument")
+			}
+			suspendMinutes = append(suspendMinutes, int64(suspendMinute))
+		}
+
+		remindSeconds := []int64{}
+		for _, remindSecondStr := range strings.Split(remindSecondsStr, ",") {
+			remindSecond, err := strconv.Atoi(remindSecondStr)
+			if err != nil {
+				errors.New("remind-seconds: invalid argument")
+			}
+			remindSeconds = append(remindSeconds, int64(remindSecond))
+		}
+
 		executor := sosos.NewExecutor(args, &sosos.ExecutorOption{
 			SleepSec:            sleepSec,
 			Port:                port,
@@ -63,6 +86,8 @@ var RootCmd = &cobra.Command{
 			NoResultFlag:        noResultFlag,
 			NoCancelLinkFlag:    noCancelLinkFlag,
 			NoScriptContentFlag: noScriptContentFlag,
+			SuspendMinutes:      suspendMinutes,
+			RemindSeconds:       remindSeconds,
 			CustomMessage:       message,
 		})
 		if err := executor.Execute(); err != nil {
@@ -92,6 +117,8 @@ func init() {
 	RootCmd.PersistentFlags().BoolVar(&noCancelLinkFlag, "no-cancel-link", false, "Not display cancel link")
 	RootCmd.PersistentFlags().BoolVar(&noScriptContentFlag, "no-script-content", false, "Not display script content")
 	RootCmd.PersistentFlags().StringVarP(&message, "message", "m", "", "Send custom message to chat")
+	RootCmd.PersistentFlags().StringVar(&suspendMinutesStr, "suspend-minutes", "5,20,60", "List of suspend minutes link(comma separated)")
+	RootCmd.PersistentFlags().StringVar(&remindSecondsStr, "remind-seconds", "60,300", "List of remind seconds link(comma separated)")
 }
 
 // initConfig reads in config file and ENV variables if set.

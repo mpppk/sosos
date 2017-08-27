@@ -49,21 +49,19 @@ type ExecutorOption struct {
 	NoCancelLinkFlag    bool
 	NoScriptContentFlag bool
 	CustomMessage       string
-	SuspendMins         []int64
+	SuspendMinutes      []int64
 	RemindSeconds       []int64
 }
 
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
-	opt.SuspendMins = []int64{1, 5, 20, 60}
-	opt.RemindSeconds = []int64{2, 60, 300}
 
 	return &Executor{
 		Commands:     commands,
 		ch:           make(chan int),
 		suspendSecCh: make(chan int),
 		slack:        slack,
-		timeKeeper:   NewTimeKeeper(opt.SleepSec, opt.RemindSeconds, opt.SuspendMins),
+		timeKeeper:   NewTimeKeeper(opt.SleepSec, opt.RemindSeconds, opt.SuspendMinutes),
 		opt:          opt,
 	}
 }
