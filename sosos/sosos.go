@@ -226,19 +226,26 @@ func (e *Executor) tick() {
 	}
 }
 
-func (e *Executor) waitWithCancelServer() (bool, error) {
+func (e *Executor) createStoppableCancelServer(cancelHandler http.Handler, suspendHandler http.Handler) (*http.Server, *stoppableListener.StoppableListener, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", e.opt.Port))
 	if err != nil {
-		return false, err
+		return nil, nil, err
 	}
 	sl, err := stoppableListener.New(l)
 	if err != nil {
-		return false, err
+		return nil, nil, err
 	}
 
-	http.Handle("/cancel", CancelHandler{e.ch})
-	http.Handle("/suspend", SuspendHandler{e.suspendSecCh})
-	s := http.Server{}
+	http.Handle("/cancel", cancelHandler)
+	http.Handle("/suspend", suspendHandler)
+	return &http.Server{}, sl, nil
+}
+
+func (e *Executor) waitWithCancelServer() (bool, error) {
+	s, sl, err := e.createStoppableCancelServer(CancelHandler{e.ch}, SuspendHandler{e.suspendSecCh})
+	if err != nil {
+		return false, err
+	}
 
 	go s.Serve(sl)
 	go e.tick()
