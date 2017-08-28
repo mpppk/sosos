@@ -30,8 +30,6 @@ var noCancelLinkFlag bool
 var noScriptContentFlag bool
 var argWebhook string
 var message string
-var suspendMinutesStr string
-var remindSecondsStr string
 
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
@@ -61,7 +59,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		suspendMinutes := []int64{}
-		for _, suspendMinuteStr := range strings.Split(suspendMinutesStr, ",") {
+		for _, suspendMinuteStr := range strings.Split(viper.GetString("suspendMinutes"), ",") {
 			suspendMinute, err := strconv.Atoi(suspendMinuteStr)
 			if err != nil {
 				errors.New("suspend-minutes: invalid argument")
@@ -70,7 +68,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		remindSeconds := []int64{}
-		for _, remindSecondStr := range strings.Split(remindSecondsStr, ",") {
+		for _, remindSecondStr := range strings.Split(viper.GetString("remindSeconds"), ",") {
 			remindSecond, err := strconv.Atoi(remindSecondStr)
 			if err != nil {
 				errors.New("remind-seconds: invalid argument")
@@ -107,9 +105,11 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.sosos.yaml)")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.config/sosos/.sosos.yaml)")
 	RootCmd.PersistentFlags().Int64VarP(&sleepSec, "sleep", "s", 60*15, "Sleep time(sec)")
-	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 3333, "Port of cancel server")
+	viper.BindPFlag("sleep", RootCmd.PersistentFlags().Lookup("sleep"))
+	RootCmd.PersistentFlags().IntVarP(&port, "port", "p", 50505, "Port of cancel server")
+	viper.BindPFlag("port", RootCmd.PersistentFlags().Lookup("port"))
 	RootCmd.PersistentFlags().BoolVarP(&insecureFlag, "insecure-server", "i", false, "Use http protocol for cancel server")
 	RootCmd.PersistentFlags().BoolVar(&versionFlag, "version", false, "Print version")
 	RootCmd.PersistentFlags().StringVarP(&argWebhook, "webhook", "w", "", "Webhook URL")
@@ -117,8 +117,11 @@ func init() {
 	RootCmd.PersistentFlags().BoolVar(&noCancelLinkFlag, "no-cancel-link", false, "Not display cancel link")
 	RootCmd.PersistentFlags().BoolVar(&noScriptContentFlag, "no-script-content", false, "Not display script content")
 	RootCmd.PersistentFlags().StringVarP(&message, "message", "m", "", "Send custom message to chat")
-	RootCmd.PersistentFlags().StringVar(&suspendMinutesStr, "suspend-minutes", "5,20,60", "List of suspend minutes link(comma separated)")
-	RootCmd.PersistentFlags().StringVar(&remindSecondsStr, "remind-seconds", "60,300", "List of remind seconds link(comma separated)")
+	viper.BindPFlag("message", RootCmd.PersistentFlags().Lookup("message"))
+	RootCmd.PersistentFlags().String("suspend-minutes", "5,20,60", "List of suspend minutes link(comma separated)")
+	viper.BindPFlag("suspendMinutes", RootCmd.PersistentFlags().Lookup("suspend-minutes"))
+	RootCmd.PersistentFlags().String("remind-seconds", "60,300", "List of remind seconds link(comma separated)")
+	viper.BindPFlag("remindSeconds", RootCmd.PersistentFlags().Lookup("remind-seconds"))
 }
 
 // initConfig reads in config file and ENV variables if set.

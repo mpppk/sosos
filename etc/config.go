@@ -8,7 +8,12 @@ type Webhook struct {
 }
 
 type Config struct {
-	Webhooks []Webhook
+	Webhooks       []Webhook
+	Sleep          int64
+	Port           int
+	Message        string
+	SuspendMinutes string
+	RemindSeconds  string
 }
 
 func LoadConfigFromFile() (*Config, error) {
