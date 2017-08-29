@@ -35,9 +35,9 @@ func generateCancelAndSuspendMessage(cancelServerUrl string, suspendMinutes []in
 	return message
 }
 
-func getScriptContentMessage(commands []string) (string, bool, error) {
+func getScriptContentMessage(commands []string, extList []string) (string, bool, error) {
 	for _, command := range commands {
-		if etc.IsScript(command) {
+		if etc.IsScript(command, extList) {
 			fileBytes, err := ioutil.ReadFile(command)
 			if err != nil {
 				return "", false, err

@@ -76,6 +76,11 @@ var RootCmd = &cobra.Command{
 			remindSeconds = append(remindSeconds, int64(remindSecond))
 		}
 
+		scriptExtList := []string{}
+		for _, scriptExt := range strings.Split(viper.GetString("scriptExt"), ",") {
+			scriptExtList = append(scriptExtList, scriptExt)
+		}
+
 		executor := sosos.NewExecutor(args, &sosos.ExecutorOption{
 			SleepSec:            sleepSec,
 			Port:                port,
@@ -87,6 +92,7 @@ var RootCmd = &cobra.Command{
 			SuspendMinutes:      suspendMinutes,
 			RemindSeconds:       remindSeconds,
 			CustomMessage:       message,
+			ScriptExtList:       scriptExtList,
 		})
 		if err := executor.Execute(); err != nil {
 			os.Exit(1)
@@ -122,6 +128,8 @@ func init() {
 	viper.BindPFlag("suspendMinutes", RootCmd.PersistentFlags().Lookup("suspend-minutes"))
 	RootCmd.PersistentFlags().String("remind-seconds", "60,300", "List of remind seconds link(comma separated)")
 	viper.BindPFlag("remindSeconds", RootCmd.PersistentFlags().Lookup("remind-seconds"))
+	RootCmd.PersistentFlags().String("script-ext", "sh,bat,ps1,rb,py,pl,php", "List of script ext for show contents(comma separated)")
+	viper.BindPFlag("scriptExt", RootCmd.PersistentFlags().Lookup("script-ext"))
 }
 
 // initConfig reads in config file and ENV variables if set.

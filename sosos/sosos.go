@@ -51,6 +51,7 @@ type ExecutorOption struct {
 	CustomMessage       string
 	SuspendMinutes      []int64
 	RemindSeconds       []int64
+	ScriptExtList       []string
 }
 
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
@@ -133,7 +134,7 @@ func (e *Executor) Execute() error {
 		u.Hostname())
 
 	if !e.opt.NoScriptContentFlag {
-		contentMessage, ok, err := getScriptContentMessage(e.Commands)
+		contentMessage, ok, err := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
 		if ok {
 			message += contentMessage
 		} else if err != nil {
@@ -158,7 +159,7 @@ func (e *Executor) Execute() error {
 		message := fmt.Sprintf("Command `%s` execution is started!", strings.Join(e.Commands, " "))
 
 		if !e.opt.NoScriptContentFlag {
-			contentMessage, ok, _ := getScriptContentMessage(e.Commands)
+			contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
 			if ok {
 				message += "\n" + contentMessage
 			}
@@ -225,7 +226,7 @@ func (e *Executor) tick() {
 			)
 
 			if !e.opt.NoScriptContentFlag {
-				contentMessage, ok, _ := getScriptContentMessage(e.Commands)
+				contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
 				if ok {
 					message += contentMessage
 				}

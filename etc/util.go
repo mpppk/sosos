@@ -2,9 +2,8 @@ package etc
 
 import "strings"
 
-func IsScript(fileName string) bool {
-	scriptExtList := []string{"sh", "bat", "ps1", "rb", "py", "pl", "php"}
-	for _, ext := range scriptExtList {
+func IsScript(fileName string, extList []string) bool {
+	for _, ext := range extList {
 		if strings.Contains(fileName, "."+ext) {
 			return true
 		}
