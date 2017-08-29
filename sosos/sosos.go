@@ -155,13 +155,22 @@ func (e *Executor) Execute() error {
 	}
 
 	if !isCanceled {
-		if _, err := e.teeMessageWithCode("Command execution is started!"); err != nil {
+		message := fmt.Sprintf("Command `%s` execution is started!", strings.Join(e.Commands, " "))
+
+		if !e.opt.NoScriptContentFlag {
+			contentMessage, ok, _ := getScriptContentMessage(e.Commands)
+			if ok {
+				message += "\n" + contentMessage
+			}
+		}
+
+		if _, err := e.teeMessageWithCode(message); err != nil {
 			return err
 		}
 		results, cmdErr := e.ExecuteCommand()
 		if !e.opt.NoResultFlag {
-			fmt.Println("result", results)
-			if _, err := e.teeMessageWithCode(fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))); err != nil {
+			message := fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
+			if _, err := e.slack.PostMessage(message); err != nil {
 				return err
 			}
 		} else {
@@ -209,10 +218,18 @@ func (e *Executor) tick() {
 		}
 
 		if remainSec, ok := e.timeKeeper.GetNewRemind(); ok {
-			message := fmt.Sprintf("Remind: The command will be executed after %d seconds(%s)\n",
+			message := fmt.Sprintf("Remind: The command `%s` will be executed after %d seconds(%s)\n",
+				strings.Join(e.Commands, " "),
 				remainSec,
 				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 			)
+
+			if !e.opt.NoScriptContentFlag {
+				contentMessage, ok, _ := getScriptContentMessage(e.Commands)
+				if ok {
+					message += contentMessage
+				}
+			}
 			e.slack.TeeMessage(message)
 		}
 	}
