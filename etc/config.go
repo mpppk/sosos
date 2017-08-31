@@ -14,6 +14,7 @@ type Config struct {
 	Message        string
 	SuspendMinutes string
 	RemindSeconds  string
+	ScriptExt      string
 }
 
 func LoadConfigFromFile() (*Config, error) {

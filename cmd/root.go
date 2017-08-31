@@ -12,12 +12,15 @@ import (
 
 	"strconv"
 
+	"io/ioutil"
+
 	"github.com/mitchellh/go-homedir"
 	"github.com/mpppk/sosos/etc"
 	"github.com/mpppk/sosos/sosos"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
 var cfgFile string
@@ -145,11 +148,36 @@ func initConfig() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	viper.AddConfigPath(filepath.Join(homeDir, ".config", "sosos")) // adding home directory as first search path
-	viper.AutomaticEnv()                                            // read in environment variables that match
+	configPath := filepath.Join(homeDir, ".config", "sosos")
+	viper.AddConfigPath(configPath) // adding home directory as first search path
+	viper.AutomaticEnv()            // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	} else {
+		config := &etc.Config{
+			Webhooks: []etc.Webhook{
+				{
+					Name: "default",
+					Url:  "https://hooks.slack.com/services/your/url",
+				},
+			},
+			Sleep:          900,
+			Port:           50505,
+			RemindSeconds:  "60,300",
+			SuspendMinutes: "5,20,60",
+			ScriptExt:      "sh,bat,ps1,rb,py,pl,php",
+			Message:        "",
+		}
+
+		content, err := yaml.Marshal(config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = ioutil.WriteFile(filepath.Join(configPath, ".sosos.yaml"), content, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
