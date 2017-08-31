@@ -170,13 +170,20 @@ func (e *Executor) Execute() error {
 		}
 		results, cmdErr := e.ExecuteCommand()
 		if !e.opt.NoResultFlag {
-			message := fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
+			var message string
+			if cmdErr != nil {
+				message = fmt.Sprintf("command failed:\n```\n%s\n```", cmdErr.Error())
+			} else {
+				message = fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
+			}
+
 			if _, err := e.slack.PostMessage(message); err != nil {
 				return err
 			}
 		} else {
 			e.slack.TeeMessage("finish!")
 		}
+
 		return cmdErr
 	} else {
 		if _, err := e.teeMessageWithCode("Command is canceled!"); err != nil {

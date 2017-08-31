@@ -95,6 +95,7 @@ var RootCmd = &cobra.Command{
 			ScriptExtList:       scriptExtList,
 		})
 		if err := executor.Execute(); err != nil {
+			fmt.Println(err)
 			os.Exit(1)
 		}
 	},
