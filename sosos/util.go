@@ -24,13 +24,13 @@ func getCancelServerUrl(port int, insecureFlag bool) (string, error) {
 
 func generateCancelAndSuspendMessage(cancelServerUrl string, suspendMinutes []int64) string {
 	message := "If you want to suspend or cancel this command, please click the following Link\n"
-	message += fmt.Sprintf("[Cancel](%s/cancel)\n", cancelServerUrl)
 	for _, suspendMin := range suspendMinutes {
-		message += fmt.Sprintf("[Suspend  %d minutes](%s/suspend?suspendSec=%d)\n",
-			suspendMin,
+		message += fmt.Sprintf("<%s/suspend?suspendSec=%d|Suspend  %d minutes>\n",
 			cancelServerUrl,
-			suspendMin*60)
+			suspendMin*60,
+			suspendMin)
 	}
+	message += fmt.Sprintf("<%s/cancel|Cancel>\n", cancelServerUrl)
 
 	return message
 }

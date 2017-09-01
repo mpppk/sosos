@@ -8,7 +8,8 @@ import (
 )
 
 type SlackWebhookContent struct {
-	Text string `json:"text"`
+	Text     string `json:"text"`
+	Username string `json:"username"`
 }
 
 type Slack struct {
@@ -21,7 +22,7 @@ func (s *Slack) TeeMessage(message string) (*http.Response, error) {
 }
 
 func (s *Slack) PostMessage(message string) (*http.Response, error) {
-	content, err := json.Marshal(SlackWebhookContent{Text: message})
+	content, err := json.Marshal(SlackWebhookContent{Text: message, Username: "SOSOS"})
 	if err != nil {
 		return nil, err
 	}
