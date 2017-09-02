@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 type SlackWebhookContent struct {
@@ -32,4 +33,12 @@ func (s *Slack) PostMessage(message string) (*http.Response, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+func (s *Slack) GenerateLinkStr(url, title string) string {
+	return fmt.Sprintf("<%s|%s>", url, title)
+}
+
+func IsSlackWebhookUrl(url string) bool {
+	return strings.Contains(url, "hooks.slack.com")
 }

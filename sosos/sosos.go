@@ -35,7 +35,7 @@ type Executor struct {
 	Commands     []string
 	ch           chan int
 	suspendSecCh chan int
-	slack        *chat.Slack
+	chatService  chat.Service
 	timeKeeper   *TimeKeeper
 	opt          *ExecutorOption
 }
@@ -55,13 +55,20 @@ type ExecutorOption struct {
 }
 
 func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
-	slack := &chat.Slack{WebhookUrl: opt.WebhookUrl}
+
+	var chatAdapter chat.Service
+
+	if chat.IsSlackWebhookUrl(opt.WebhookUrl) {
+		chatAdapter = &chat.Slack{WebhookUrl: opt.WebhookUrl}
+	} else {
+		chatAdapter = &chat.Mattermost{Slack: &chat.Slack{WebhookUrl: opt.WebhookUrl}}
+	}
 
 	return &Executor{
 		Commands:     commands,
 		ch:           make(chan int),
 		suspendSecCh: make(chan int),
-		slack:        slack,
+		chatService:  chatAdapter,
 		timeKeeper:   NewTimeKeeper(opt.SleepSec, opt.RemindSeconds, opt.SuspendMinutes),
 		opt:          opt,
 	}
@@ -143,7 +150,7 @@ func (e *Executor) Execute() error {
 	}
 
 	if !e.opt.NoCancelLinkFlag {
-		message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes)
+		message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
 	}
 
 	if _, err := e.teeMessageWithCode(message); err != nil {
@@ -177,11 +184,11 @@ func (e *Executor) Execute() error {
 				message = fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
 			}
 
-			if _, err := e.slack.PostMessage(message); err != nil {
+			if _, err := e.chatService.PostMessage(message); err != nil {
 				return err
 			}
 		} else {
-			e.slack.TeeMessage("finish!")
+			e.chatService.TeeMessage("finish!")
 		}
 
 		return cmdErr
@@ -212,9 +219,9 @@ func (e *Executor) tick() {
 				suspendSec,
 				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 			)
-			e.slack.TeeMessage(message)
+			e.chatService.TeeMessage(message)
 		case <-sigintCh:
-			e.slack.TeeMessage("The command is terminated by SIGINT signal")
+			e.chatService.TeeMessage("The command is terminated by SIGINT signal")
 			os.Exit(0)
 		default:
 		}
@@ -238,7 +245,7 @@ func (e *Executor) tick() {
 					message += contentMessage
 				}
 			}
-			e.slack.TeeMessage(message)
+			e.chatService.TeeMessage(message)
 		}
 	}
 }
@@ -273,7 +280,7 @@ func (e *Executor) waitWithCancelServer() (bool, error) {
 }
 
 func (e *Executor) teeMessageWithCode(message string) (*http.Response, error) {
-	res, err := e.slack.TeeMessage(message)
+	res, err := e.chatService.TeeMessage(message)
 	if err != nil {
 		return nil, err
 	}
