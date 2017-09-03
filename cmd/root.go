@@ -54,7 +54,6 @@ var RootCmd = &cobra.Command{
 			webhookUrl = argWebhook
 		} else {
 			if webhook, ok := config.FindWebhook(argWebhook); ok {
-				fmt.Println(webhook.Url)
 				webhookUrl = webhook.Url
 			} else {
 				log.Fatal("There is no webhook called ", argWebhook, " in the config file")
