@@ -1,6 +1,8 @@
 # SOSOS
 sosos is the minimal command wrapper for realizing delay, notification, cancellation via chat.
 
+![result](imgs/demo_comp.gif)
+
 # Usage
 
 ## minimal example:
