@@ -101,7 +101,16 @@ var RootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
-	Args: cobra.MinimumNArgs(1),
+	Args: MinimumNArgsWithoutVersionOption(1),
+}
+
+func MinimumNArgsWithoutVersionOption(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n && !versionFlag {
+			return fmt.Errorf("requires at least %d arg(s), only received %d", n, len(args))
+		}
+		return nil
+	}
 }
 
 func Execute() {
