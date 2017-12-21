@@ -120,46 +120,49 @@ func (e *Executor) ExecuteCommand() ([]string, error) {
 }
 
 func (e *Executor) Execute() error {
-	cancelServerUrl, err := getCancelServerUrl(e.opt.Port, e.opt.InsecureFlag)
-	if err != nil {
-		return err
-	}
-
-	u, err := url.Parse(cancelServerUrl)
-	if err != nil {
-		return err
-	}
-
-	message := e.opt.CustomMessage
-	if message != "" {
-		message += "\n"
-	}
-	message += fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
-		strings.Join(e.Commands, " "),
-		e.timeKeeper.sleepSec,
-		e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
-		u.Hostname())
-
-	if !e.opt.NoScriptContentFlag {
-		contentMessage, ok, err := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
-		if ok {
-			message += contentMessage
-		} else if err != nil {
+	isCanceled := false
+	if e.opt.SleepSec != 0 {
+		cancelServerUrl, err := getCancelServerUrl(e.opt.Port, e.opt.InsecureFlag)
+		if err != nil {
 			return err
 		}
-	}
 
-	if !e.opt.NoCancelLinkFlag {
-		message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
-	}
+		u, err := url.Parse(cancelServerUrl)
+		if err != nil {
+			return err
+		}
 
-	if _, err := e.teeMessageWithCode(message); err != nil {
-		return err
-	}
+		message := e.opt.CustomMessage
+		if message != "" {
+			message += "\n"
+		}
+		message += fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
+			strings.Join(e.Commands, " "),
+			e.timeKeeper.sleepSec,
+			e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
+			u.Hostname())
 
-	isCanceled, err := e.waitWithCancelServer()
-	if err != nil {
-		return err
+		if !e.opt.NoScriptContentFlag {
+			contentMessage, ok, err := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
+			if ok {
+				message += contentMessage
+			} else if err != nil {
+				return err
+			}
+		}
+
+		if !e.opt.NoCancelLinkFlag {
+			message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
+		}
+
+		if _, err := e.teeMessageWithCode(message); err != nil {
+			return err
+		}
+
+		isCanceled, err = e.waitWithCancelServer()
+		if err != nil {
+			return err
+		}
 	}
 
 	if !isCanceled {
