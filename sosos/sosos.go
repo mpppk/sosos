@@ -35,6 +35,7 @@ type Executor struct {
 	Commands     []string
 	ch           chan int
 	suspendSecCh chan int
+	executeNowCh chan bool
 	chatService  chat.Service
 	timeKeeper   *TimeKeeper
 	opt          *ExecutorOption
@@ -68,6 +69,7 @@ func NewExecutor(commands []string, opt *ExecutorOption) *Executor {
 		Commands:     commands,
 		ch:           make(chan int),
 		suspendSecCh: make(chan int),
+		executeNowCh: make(chan bool),
 		chatService:  chatAdapter,
 		timeKeeper:   NewTimeKeeper(opt.SleepSec, opt.RemindSeconds, opt.SuspendMinutes),
 		opt:          opt,
@@ -152,7 +154,7 @@ func (e *Executor) Execute() error {
 		}
 
 		if !e.opt.NoCancelLinkFlag {
-			message += generateCancelAndSuspendMessage(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
+			message += generateActionMessages(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
 		}
 
 		if _, err := e.teeMessageWithCode(message); err != nil {
@@ -223,6 +225,9 @@ func (e *Executor) tick() {
 				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
 			)
 			e.chatService.TeeMessage(message)
+		case <-e.executeNowCh:
+			e.ch <- STATE_SLEEP_FINISHED
+			return
 		case <-sigintCh:
 			e.chatService.TeeMessage("The command is terminated by SIGINT signal")
 			os.Exit(0)
@@ -253,7 +258,7 @@ func (e *Executor) tick() {
 	}
 }
 
-func (e *Executor) createStoppableCancelServer(cancelHandler http.Handler, suspendHandler http.Handler) (*http.Server, *stoppableListener.StoppableListener, error) {
+func (e *Executor) createStoppableCancelServer(cancelHandler http.Handler, suspendHandler http.Handler, executeNowHandler http.Handler) (*http.Server, *stoppableListener.StoppableListener, error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", e.opt.Port))
 	if err != nil {
 		return nil, nil, err
@@ -265,11 +270,12 @@ func (e *Executor) createStoppableCancelServer(cancelHandler http.Handler, suspe
 
 	http.Handle("/cancel", cancelHandler)
 	http.Handle("/suspend", suspendHandler)
+	http.Handle("/execute-now", executeNowHandler)
 	return &http.Server{}, sl, nil
 }
 
 func (e *Executor) waitWithCancelServer() (bool, error) {
-	s, sl, err := e.createStoppableCancelServer(CancelHandler{e.ch}, SuspendHandler{e.suspendSecCh})
+	s, sl, err := e.createStoppableCancelServer(CancelHandler{e.ch}, SuspendHandler{e.suspendSecCh}, ExecuteNowHandler{e.executeNowCh})
 	if err != nil {
 		return false, err
 	}
