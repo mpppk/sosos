@@ -44,7 +44,6 @@ func (t *TimeKeeper) UpdateRemindSeconds() {
 
 func (t *TimeKeeper) SuspendCommandExecuteTime(suspendSec int) {
 	t.commandExecuteTime = t.commandExecuteTime.Add(time.Duration(suspendSec) * time.Second)
-
 }
 
 func (t *TimeKeeper) UpdateRemainSec() {

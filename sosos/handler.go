@@ -54,3 +54,15 @@ func (s SuspendHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		s.SuspendSecCh <- suspendSec
 	}()
 }
+
+type ExecuteNowHandler struct {
+	ExecuteNowCh chan bool
+}
+
+func (c ExecuteNowHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	rw.WriteHeader(http.StatusOK)
+	fmt.Fprintln(rw, "Command execution started!")
+	go func() {
+		c.ExecuteNowCh <- true
+	}()
+}
