@@ -28,11 +28,11 @@ func NewTimeKeeper(sleepSec int64, remindSeconds []int64, suspendMinutes []int64
 		remainSec:          remainSec,
 	}
 
-	t.UpdateRemindSeconds()
+	t.updateRemindSeconds()
 	return t
 }
 
-func (t *TimeKeeper) UpdateRemindSeconds() {
+func (t *TimeKeeper) updateRemindSeconds() {
 	t.UpdateRemainSec()
 	t.remindSeconds = t.orgRemindSeconds
 	for _, second := range t.orgRemindSeconds {

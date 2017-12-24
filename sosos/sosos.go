@@ -167,42 +167,41 @@ func (e *Executor) Execute() error {
 		}
 	}
 
-	if !isCanceled {
-		message := fmt.Sprintf("Command `%s` execution is started!", strings.Join(e.Commands, " "))
-
-		if !e.opt.NoScriptContentFlag {
-			contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
-			if ok {
-				message += "\n" + contentMessage
-			}
-		}
-
-		if _, err := e.teeMessageWithCode(message); err != nil {
-			return err
-		}
-		results, cmdErr := e.ExecuteCommand()
-		if !e.opt.NoResultFlag {
-			var message string
-			if cmdErr != nil {
-				message = fmt.Sprintf("command failed:\n```\n%s\n```", cmdErr.Error())
-			} else {
-				message = fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
-			}
-
-			if _, err := e.chatService.PostMessage(message); err != nil {
-				return err
-			}
-		} else {
-			e.chatService.TeeMessage("finish!")
-		}
-
-		return cmdErr
-	} else {
+	if isCanceled {
 		if _, err := e.teeMessageWithCode("Command is canceled!"); err != nil {
 			return err
 		}
 	}
-	return nil
+
+	message := fmt.Sprintf("Command `%s` execution is started!", strings.Join(e.Commands, " "))
+
+	if !e.opt.NoScriptContentFlag {
+		contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
+		if ok {
+			message += "\n" + contentMessage
+		}
+	}
+
+	if _, err := e.teeMessageWithCode(message); err != nil {
+		return err
+	}
+	results, cmdErr := e.ExecuteCommand()
+	if !e.opt.NoResultFlag {
+		var message string
+		if cmdErr != nil {
+			message = fmt.Sprintf("command failed:\n```\n%s\n```", cmdErr.Error())
+		} else {
+			message = fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
+		}
+
+		if _, err := e.chatService.PostMessage(message); err != nil {
+			return err
+		}
+	} else {
+		e.chatService.TeeMessage("finish!")
+	}
+
+	return cmdErr
 }
 
 func (e *Executor) tick() {
