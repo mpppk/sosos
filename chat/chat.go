@@ -1,6 +1,8 @@
 package chat
 
-import "net/http"
+import (
+	"net/http"
+)
 
 type Service interface {
 	PostMessage(message string) (*http.Response, error)
