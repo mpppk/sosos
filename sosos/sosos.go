@@ -151,17 +151,19 @@ func (e *Executor) Execute() error {
 	if _, err := e.teeMessageWithCode(message); err != nil {
 		return err
 	}
+
 	results, cmdErr := e.ExecuteCommand()
 	if !e.opt.NoResultFlag {
 		var message string
 		if cmdErr != nil {
 			message = getCommandFailedMessage(cmdErr)
+			if _, err := e.chatService.PostMessage(message); err != nil {
+				return err
+			}
 		} else {
-			message = getCommandResultMessage(results)
-		}
-
-		if _, err := e.chatService.PostMessage(message); err != nil {
-			return err
+			if _, err := e.chatService.PostResultMessage(results); err != nil {
+				return err
+			}
 		}
 	} else {
 		e.chatService.TeeMessage("finish!")

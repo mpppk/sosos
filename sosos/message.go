@@ -72,10 +72,6 @@ func getCommandFailedMessage(err error) string {
 	return fmt.Sprintf("command failed:\n```\n%s\n```", err.Error())
 }
 
-func getCommandResultMessage(results []string) string {
-	return fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
-}
-
 func getCommandTerminateMessage() string {
 	return "The command is terminated by SIGINT signal"
 }
