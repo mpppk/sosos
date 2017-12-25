@@ -9,8 +9,6 @@ import (
 
 	"os"
 
-	"strings"
-
 	"net/url"
 
 	"bufio"
@@ -124,83 +122,90 @@ func (e *Executor) ExecuteCommand() ([]string, error) {
 func (e *Executor) Execute() error {
 	isCanceled := false
 	if e.opt.SleepSec != 0 {
-		cancelServerUrl, err := getCancelServerUrl(e.opt.Port, e.opt.InsecureFlag)
-		if err != nil {
+		if err := e.teeCommandStartMessage(); err != nil {
 			return err
 		}
 
-		u, err := url.Parse(cancelServerUrl)
-		if err != nil {
-			return err
-		}
-
-		message := e.opt.CustomMessage
-		if message != "" {
-			message += "\n"
-		}
-		message += fmt.Sprintf("The command `%s` will be executed after %d seconds(%s) on `%s`\n",
-			strings.Join(e.Commands, " "),
-			e.timeKeeper.sleepSec,
-			e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
-			u.Hostname())
-
-		if !e.opt.NoScriptContentFlag {
-			contentMessage, ok, err := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
-			if ok {
-				message += contentMessage
-			} else if err != nil {
-				return err
-			}
-		}
-
-		if !e.opt.NoCancelLinkFlag {
-			message += generateActionMessages(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
-		}
-
-		if _, err := e.teeMessageWithCode(message); err != nil {
-			return err
-		}
-
+		var err error
 		isCanceled, err = e.waitWithCancelServer()
 		if err != nil {
 			return err
 		}
 	}
 
-	if !isCanceled {
-		message := fmt.Sprintf("Command `%s` execution is started!", strings.Join(e.Commands, " "))
-
-		if !e.opt.NoScriptContentFlag {
-			contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
-			if ok {
-				message += "\n" + contentMessage
-			}
-		}
-
-		if _, err := e.teeMessageWithCode(message); err != nil {
+	if isCanceled {
+		if _, err := e.teeMessageWithCode(getCommandCancelMessage()); err != nil {
 			return err
 		}
-		results, cmdErr := e.ExecuteCommand()
-		if !e.opt.NoResultFlag {
-			var message string
-			if cmdErr != nil {
-				message = fmt.Sprintf("command failed:\n```\n%s\n```", cmdErr.Error())
-			} else {
-				message = fmt.Sprintf("result:\n```\n%s\n```", strings.Join(results, "\n"))
-			}
+	}
 
+	message := getCommandExecutionStartMessage(e.Commands)
+
+	if !e.opt.NoScriptContentFlag {
+		contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
+		if ok {
+			message += "\n" + contentMessage
+		}
+	}
+
+	if _, err := e.teeMessageWithCode(message); err != nil {
+		return err
+	}
+
+	results, cmdErr := e.ExecuteCommand()
+	if !e.opt.NoResultFlag {
+		var message string
+		if cmdErr != nil {
+			message = getCommandFailedMessage(cmdErr)
 			if _, err := e.chatService.PostMessage(message); err != nil {
 				return err
 			}
 		} else {
-			e.chatService.TeeMessage("finish!")
+			if _, err := e.chatService.PostResultMessage(results); err != nil {
+				return err
+			}
 		}
-
-		return cmdErr
 	} else {
-		if _, err := e.teeMessageWithCode("Command is canceled!"); err != nil {
+		e.chatService.TeeMessage("finish!")
+	}
+
+	return cmdErr
+}
+
+func (e *Executor) teeCommandStartMessage() error {
+	cancelServerUrl, err := getCancelServerUrl(e.opt.Port, e.opt.InsecureFlag)
+	if err != nil {
+		return err
+	}
+
+	u, err := url.Parse(cancelServerUrl)
+	if err != nil {
+		return err
+	}
+
+	message := e.opt.CustomMessage
+	if message != "" {
+		message += "\n"
+	}
+	message += getCommandStartMessage(
+		e.Commands, e.timeKeeper.sleepSec, e.timeKeeper.commandExecuteTime, u.Hostname(),
+	)
+
+	if !e.opt.NoScriptContentFlag {
+		contentMessage, ok, err := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
+		if ok {
+			message += contentMessage
+		} else if err != nil {
 			return err
 		}
+	}
+
+	if !e.opt.NoCancelLinkFlag {
+		message += generateActionMessages(cancelServerUrl, e.timeKeeper.suspendMinutes, e.chatService)
+	}
+
+	if _, err := e.teeMessageWithCode(message); err != nil {
+		return err
 	}
 	return nil
 }
@@ -220,16 +225,14 @@ func (e *Executor) tick() {
 			}
 		case suspendSec := <-e.suspendSecCh:
 			e.timeKeeper.SuspendCommandExecuteTime(suspendSec)
-			message := fmt.Sprintf("Time to command execution has been suspended by %d seconds. (%s)",
-				suspendSec,
-				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
-			)
-			e.chatService.TeeMessage(message)
+			e.chatService.TeeMessage(getCommandSuspendMessage(
+				suspendSec, e.timeKeeper.commandExecuteTime,
+			))
 		case <-e.executeNowCh:
 			e.ch <- STATE_SLEEP_FINISHED
 			return
 		case <-sigintCh:
-			e.chatService.TeeMessage("The command is terminated by SIGINT signal")
+			e.chatService.TeeMessage(getCommandTerminateMessage())
 			os.Exit(0)
 		default:
 		}
@@ -241,12 +244,9 @@ func (e *Executor) tick() {
 		}
 
 		if remainSec, ok := e.timeKeeper.GetNewRemind(); ok {
-			message := fmt.Sprintf("Remind: The command `%s` will be executed after %d seconds(%s)\n",
-				strings.Join(e.Commands, " "),
-				remainSec,
-				e.timeKeeper.commandExecuteTime.Format("01/02 15:04:05"),
+			message := getCommandRemindMessage(
+				e.Commands, remainSec, e.timeKeeper.commandExecuteTime,
 			)
-
 			if !e.opt.NoScriptContentFlag {
 				contentMessage, ok, _ := getScriptContentMessage(e.Commands, e.opt.ScriptExtList)
 				if ok {

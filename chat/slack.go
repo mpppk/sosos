@@ -35,6 +35,28 @@ func (s *Slack) PostMessage(message string) (*http.Response, error) {
 	return res, nil
 }
 
+func (s *Slack) PostResultMessage(results []string) (*http.Response, error) {
+	value := fmt.Sprintf("```%s```", strings.Join(results, "\n"))
+	message := &Message{
+		Username: "SOSOS",
+		Attachments: []*Attachment{{
+			Title:    "result",
+			Text:     value,
+			MrkdwnIn: []string{"text"},
+		}},
+	}
+	content, err := json.Marshal(message)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.Post(s.WebhookUrl, "application/json", bytes.NewReader(content))
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (s *Slack) GenerateLinkStr(url, title string) string {
 	return fmt.Sprintf("<%s|%s>", url, title)
 }
