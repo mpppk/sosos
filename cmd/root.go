@@ -40,7 +40,7 @@ var RootCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionFlag {
-			fmt.Println("0.8.0")
+			fmt.Println("0.8.1")
 			os.Exit(0)
 		}
 

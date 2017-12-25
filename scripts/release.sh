@@ -15,4 +15,4 @@ zip tarpkg/sosos_windows_386.zip pkg/sosos_windows_386/sosos.exe
 
 rm -f tarpkg/.DS_Store
 
-ghr v0.8.0 tarpkg
+ghr v0.8.1 tarpkg

@@ -49,14 +49,14 @@ $ sosos --sleep 20 \
 ### linux or mac:
 
 ```bash
-$ curl -sL "https://github.com/mpppk/sosos/releases/download/v0.8.0/sosos_linux_amd64.tar.gz" |
+$ curl -sL "https://github.com/mpppk/sosos/releases/download/v0.8.1/sosos_linux_amd64.tar.gz" |
 tar xz \
   --strip=2 \
   '*/sosos' 
 $ mv ./sosos /usr/local/bin/sosos
 ```
 
-If you are using mac, replace URL to `https://github.com/mpppk/sosos/releases/download/v0.8.0/sosos_mac_amd64.tar.gz`
+If you are using mac, replace URL to `https://github.com/mpppk/sosos/releases/download/v0.8.1/sosos_mac_amd64.tar.gz`
 
 ### windows: 
 Download binary from [release page](https://github.com/mpppk/sosos/releases)
