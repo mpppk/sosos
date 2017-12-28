@@ -3,5 +3,4 @@
 *.iml
 out
 gen
-pkg
-tarpkg
+dist

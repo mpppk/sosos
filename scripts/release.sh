@@ -1,18 +1,14 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-gox -os "darwin linux windows" \
- -arch "386 amd64" \
- -output "pkg/{{.Dir}}_{{.OS}}_{{.Arch}}/{{.Dir}}"
+set -eu
 
-mkdir tarpkg
+read -p "input next version: " next_version
 
-tar -zcvf tarpkg/sosos_linux_amd64.tar.gz pkg/sosos_linux_amd64/sosos
-tar -zcvf tarpkg/sosos_linux_386.tar.gz pkg/sosos_linux_386/sosos
-tar -zcvf tarpkg/sosos_darwin_amd64.tar.gz pkg/sosos_darwin_amd64/sosos
-tar -zcvf tarpkg/sosos_darwin_386.tar.gz pkg/sosos_darwin_386/sosos
-zip tarpkg/sosos_windows_amd64.zip pkg/sosos_windows_amd64/sosos.exe
-zip tarpkg/sosos_windows_386.zip pkg/sosos_windows_386/sosos.exe
+gobump set ${next_version} -w cmd/
 
-rm -f tarpkg/.DS_Store
+git commit -am "Checking in changes prior to tagging of version v$next_version"
+git tag v${next_version}
+git push && git push --tags
 
-ghr v0.8.1 tarpkg
+goxz -pv=v$(gobump show -r cmd/) -d=./dist/v$(gobump show -r cmd/)
+ghr ${next_version} dist/${next_version}

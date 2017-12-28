@@ -34,13 +34,15 @@ var noScriptContentFlag bool
 var argWebhook string
 var message string
 
+const version = "0.8.1"
+
 var RootCmd = &cobra.Command{
 	Use:   "sosos",
 	Short: "delay & notify tool",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionFlag {
-			fmt.Println("0.8.1")
+			fmt.Println(version)
 			os.Exit(0)
 		}
 
